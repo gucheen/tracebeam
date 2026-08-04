@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tracebeam",
+  "version": "0.1.0",
+  "identifier": "app.tracebeam.viewer",
+  "build": {
+    "beforeDevCommand": "npm run web",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run web:build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{
+      "title": "Tracebeam",
+      "width": 1420,
+      "height": 900,
+      "minWidth": 980,
+      "minHeight": 640,
+      "decorations": true,
+      "dragDropEnabled": true,
+      "backgroundColor": "#0b0c0f"
+    }],
+    "security": { "csp": null }
+  },
+  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.svg"] }
+}
