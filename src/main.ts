@@ -30,7 +30,7 @@ app.innerHTML = `
       <div class="stats"><div><b id="total">—</b><span>total events</span></div><div><b id="size">—</b><span>file size</span></div></div>
     </aside>
     <div class="content">
-      <div class="toolbar"><div class="search"><span>⌕</span><input id="search" placeholder="Search logs…" autocomplete="off"><kbd>⌘K</kbd></div><button id="case" title="Case sensitive">Aa</button><button id="regex" title="Regular expression">.*</button><div id="resultMeta" class="result-meta">Ready</div></div>
+      <div class="toolbar"><div class="search"><span>⌕</span><input id="search" placeholder="Search logs…" autocomplete="off"><kbd>⌘K</kbd></div><button id="case" title="Case sensitive">Aa</button><button id="regex" title="Regular expression">.*</button><button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button><div id="resultMeta" class="result-meta">Ready</div></div>
       <div class="columns"><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
       <div id="rows" class="rows"><div class="empty"><div class="empty-icon">⌁</div><h2>Open a JSONL log</h2><p>Drop a file anywhere, or press <kbd>⌘O</kbd></p></div></div>
       <footer><span id="range">0 events</span><div class="pager"><button id="prev">‹</button><span id="page">1</span><button id="next">›</button></div><span id="perf">Waiting for data</span></footer>
@@ -40,7 +40,8 @@ app.innerHTML = `
   </main>`;
 
 const $ = <T extends HTMLElement>(s:string) => document.querySelector<T>(s)!;
-const state = { info:null as FileInfo|null, levels:new Set<string>(), scopes:new Set<string>(), page:0, limit:250, regex:false, caseSensitive:false, timer:0 };
+const followKey='tracebeam.followLatest';
+const state = { info:null as FileInfo|null, levels:new Set<string>(), scopes:new Set<string>(), page:0, limit:250, regex:false, caseSensitive:false, followLatest:localStorage.getItem(followKey)==='true', timer:0 };
 const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
@@ -50,6 +51,13 @@ const parseFields = (id:string) => document.querySelector<HTMLInputElement>(`#${
 
 function applyTheme(theme:string){ document.documentElement.dataset.theme=theme; localStorage.setItem('tracebeam.theme',theme); $('#theme').textContent=theme==='light'?'☾':'☀'; }
 applyTheme(localStorage.getItem('tracebeam.theme') || 'dark');
+
+function setFollowLatest(enabled:boolean){
+  state.followLatest=enabled; localStorage.setItem(followKey,String(enabled));
+  const button=$('#follow'); button.classList.toggle('active',enabled); button.setAttribute('aria-pressed',String(enabled));
+  button.title=enabled?'Following new logs — click to stop':'Follow new logs';
+  if(enabled&&state.info)query({jumpToLatest:true,scrollToEnd:true});
+}
 
 function populateFieldForm(){
   document.querySelector<HTMLInputElement>('#timeFields')!.value=fieldConfig.timeFields.join(', ');
@@ -89,13 +97,17 @@ function renderInfo(){
 }
 function check(v:string,type:string){ return `<label class="check"><input type="checkbox" data-type="${type}" value="${esc(v)}"><span class="level-dot ${v.toLowerCase()}"></span><span title="${esc(v)}">${esc(v)}</span></label>`; }
 let queryToken=0;
-async function query(){
+async function query(options:{jumpToLatest?:boolean;scrollToEnd?:boolean}={}){
   if(!state.info)return; const token=++queryToken; const search=document.querySelector<HTMLInputElement>('#search')!; const q={ text:search.value, regex:state.regex, caseSensitive:state.caseSensitive, levels:[...state.levels], scopes:[...state.scopes], offset:state.page*state.limit, limit:state.limit };
   const result=await invoke<Result>('query_logs',{query:q}); if(token!==queryToken)return;
+  const pages=Math.max(1,Math.ceil(result.matched/state.limit));
+  if(options.jumpToLatest&&state.page!==pages-1){state.page=pages-1;return query({scrollToEnd:options.scrollToEnd})}
+  if(state.page>=pages){state.page=pages-1;return query(options)}
   $('#resultMeta').textContent=result.error?result.error:`${result.matched.toLocaleString()} matches · ${result.elapsedMs} ms`; $('#resultMeta').classList.toggle('error',!!result.error);
-  renderRows(result); const pages=Math.max(1,Math.ceil(result.matched/state.limit)); if(state.page>=pages){state.page=pages-1;return query()}
+  renderRows(result);
   $('#page').textContent=`${state.page+1} / ${pages}`; $('#prev').toggleAttribute('disabled',state.page===0); $('#next').toggleAttribute('disabled',state.page>=pages-1);
   const start=result.matched?state.page*state.limit+1:0, end=Math.min((state.page+1)*state.limit,result.matched); $('#range').textContent=`${start.toLocaleString()}–${end.toLocaleString()} of ${result.matched.toLocaleString()}`; $('#perf').textContent=`Searched ${result.total.toLocaleString()} events in ${result.elapsedMs} ms`;
+  if(options.scrollToEnd){const rows=$('#rows');rows.scrollTop=rows.scrollHeight}
 }
 function renderRows(result:Result){
   const rows=$('#rows'); if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';return}
@@ -162,12 +174,14 @@ function showDetail(e:Entry){ $('#detailLevel').textContent=e.level; $('#detailL
 function debounce(){ window.clearTimeout(state.timer); state.timer=window.setTimeout(()=>{state.page=0;query()},140); }
 
 renderHistory();
+setFollowLatest(state.followLatest);
 $('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>navigator.clipboard.writeText($('#json').textContent||'');
 $('#settings').onclick=()=>{populateFieldForm();($('#fieldDialog') as HTMLDialogElement).showModal()};
 $('#settingsClose').onclick=()=>($('#fieldDialog') as HTMLDialogElement).close();
 $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
 $('#theme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
+$('#follow').onclick=()=>setFollowLatest(!state.followLatest);
 $('#search').addEventListener('input',debounce); $('#regex').onclick=()=>{state.regex=!state.regex;$('#regex').classList.toggle('active',state.regex);debounce()}; $('#case').onclick=()=>{state.caseSensitive=!state.caseSensitive;$('#case').classList.toggle('active',state.caseSensitive);debounce()};
 $('#prev').onclick=()=>{if(state.page){state.page--;query()}}; $('#next').onclick=()=>{state.page++;query()};
 $('#clear').onclick=()=>{state.levels.clear();state.scopes.clear();document.querySelectorAll<HTMLInputElement>('.check input').forEach(x=>x.checked=false);state.page=0;query()};
@@ -175,4 +189,4 @@ document.addEventListener('change',e=>{const x=e.target as HTMLInputElement;if(!
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='o'){e.preventDefault();chooseFile()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus()}if(e.key==='Escape'&&($('#detail') as HTMLDialogElement).open)($('#detail') as HTMLDialogElement).close()});
 getCurrentWebview().onDragDropEvent(e=>{if(e.payload.type==='drop'&&e.payload.paths[0])load(e.payload.paths[0])});
 invoke('set_field_config',{config:fieldConfig}).catch(()=>{});
-window.setInterval(async()=>{if(!state.info)return;try{const latest=await invoke<FileInfo>('refresh_log');if(latest.total!==state.info.total||latest.size!==state.info.size){state.info=latest;renderInfo();query()}}catch{}},750);
+window.setInterval(async()=>{if(!state.info)return;try{const latest=await invoke<FileInfo>('refresh_log');if(latest.total!==state.info.total||latest.size!==state.info.size){state.info=latest;renderInfo();query(state.followLatest?{jumpToLatest:true,scrollToEnd:true}:{})}}catch{}},750);
