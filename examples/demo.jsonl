@@ -1,0 +1,12 @@
+{"timestamp":"2026-08-05T09:41:12.084+08:00","level":"info","scope":"gateway","message":"HTTP server listening on 0.0.0.0:8080","requestId":"req-a91f"}
+{"timestamp":"2026-08-05T09:41:13.227+08:00","level":"debug","scope":"database","message":"Connection pool initialized with 16 workers","durationMs":38}
+{"timestamp":"2026-08-05T09:41:15.902+08:00","level":"info","scope":"auth","message":"User session validated","userId":"usr_2841","durationMs":12}
+{"timestamp":"2026-08-05T09:41:18.441+08:00","level":"warn","scope":"payments","message":"Payment provider response exceeded latency threshold","durationMs":842,"thresholdMs":500}
+{"timestamp":"2026-08-05T09:41:19.006+08:00","level":"info","scope":"orders","message":"Order ord_7F21 created successfully","amount":128.5,"currency":"USD"}
+{"timestamp":"2026-08-05T09:41:21.337+08:00","level":"error","scope":"worker","message":"Failed to process delivery job after 3 attempts","jobId":"job_91d2","error":"upstream timeout"}
+{"timestamp":"2026-08-05T09:41:22.715+08:00","level":"debug","scope":"cache","message":"Cache hit for product catalog","key":"catalog:v4","ttl":294}
+{"timestamp":"2026-08-05T09:41:24.192+08:00","level":"info","scope":"gateway","message":"GET /api/v1/orders completed","status":200,"durationMs":47}
+{"timestamp":"2026-08-05T09:41:26.529+08:00","level":"warn","scope":"database","message":"Slow query detected on order_events","durationMs":633}
+{"timestamp":"2026-08-05T09:41:28.884+08:00","level":"info","scope":"scheduler","message":"Inventory reconciliation completed","itemsProcessed":1842}
+{"timestamp":"2026-08-05T09:41:31.103+08:00","level":"error","scope":"payments","message":"Card authorization declined by issuer","code":"do_not_honor","requestId":"req-c83a"}
+{"timestamp":"2026-08-05T09:41:33.670+08:00","level":"info","scope":"auth","message":"API key rotated successfully","keyId":"key_03f7"}
