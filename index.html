@@ -1,1 +1,81 @@
-<div id="app"></div><script type="module" src="/src/main.ts"></script>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Tracebeam — a fast desktop viewer for JSONL logs." />
+    <title>Tracebeam</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div class="brand"><span class="mark" aria-hidden="true">T</span><span>Tracebeam</span></div>
+        <button id="open" class="open">Open log <kbd>⌘O</kbd></button>
+        <div class="history-wrap">
+          <button id="history" class="icon-button" title="Recently opened" aria-label="Recently opened" aria-expanded="false">↶</button>
+          <div id="historyMenu" class="history-menu" hidden></div>
+        </div>
+        <div class="file" id="file"><span class="dot"></span><span id="filename">No file open</span></div>
+        <div class="spacer"></div>
+        <button id="settings" class="icon-button" title="Field mapping" aria-label="Field mapping">⚙</button>
+        <button id="theme" class="icon-button" title="Toggle color theme" aria-label="Toggle color theme">☀</button>
+        <span class="tail"><i></i> LIVE</span>
+      </header>
+
+      <main>
+        <aside>
+          <div class="side-title">FILTERS <button id="clear">Clear</button></div>
+          <section><label>LEVEL</label><div id="levels" class="checks"><span class="muted">Open a log to begin</span></div></section>
+          <section><label>SCOPE</label><div id="scopes" class="checks"></div></section>
+          <div class="stats">
+            <div><b id="total">—</b><span>total events</span></div>
+            <div><b id="size">—</b><span>file size</span></div>
+          </div>
+        </aside>
+
+        <div class="content">
+          <div class="toolbar">
+            <div class="search">
+              <span aria-hidden="true">⌕</span>
+              <input id="search" placeholder="Search logs…" aria-label="Search logs" autocomplete="off">
+              <kbd>⌘K</kbd>
+            </div>
+            <button id="case" title="Case sensitive" aria-pressed="false">Aa</button>
+            <button id="regex" title="Regular expression" aria-pressed="false">.*</button>
+            <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
+            <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
+          </div>
+          <div class="columns"><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
+          <div id="rows" class="rows">
+            <div class="empty"><div class="empty-icon">⌁</div><h2>Open a JSONL log</h2><p>Drop a file anywhere, or press <kbd>⌘O</kbd></p></div>
+          </div>
+          <footer>
+            <span id="range">0 events</span>
+            <div class="pager"><button id="prev" aria-label="Previous page">‹</button><span id="page">1</span><button id="next" aria-label="Next page">›</button></div>
+            <span id="perf">Waiting for data</span>
+          </footer>
+        </div>
+
+        <dialog id="detail">
+          <div class="detail-head"><div><span id="detailLevel"></span><b id="detailTime"></b></div><button id="close" aria-label="Close">×</button></div>
+          <pre id="json"></pre>
+          <button id="copy">Copy JSON</button>
+        </dialog>
+
+        <dialog id="fieldDialog" class="settings-dialog">
+          <div class="detail-head"><div><b>FIELD MAPPING</b></div><button id="settingsClose" aria-label="Close">×</button></div>
+          <div class="settings-body">
+            <p>多个候选字段用逗号分隔，按顺序匹配；支持 <code>meta.timestamp</code> 嵌套路径。</p>
+            <label>时间字段<input id="timeFields"></label>
+            <label>等级字段<input id="levelFields"></label>
+            <label>Scope 字段<input id="scopeFields"></label>
+            <label>消息字段<input id="messageFields"></label>
+          </div>
+          <div class="settings-actions"><button id="resetFields">恢复默认</button><button id="saveFields" class="primary">保存并重新索引</button></div>
+        </dialog>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
