@@ -44,9 +44,10 @@
             <button id="case" title="Case sensitive" aria-pressed="false">Aa</button>
             <button id="regex" title="Regular expression" aria-pressed="false">.*</button>
             <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
+            <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
             <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
           </div>
-          <div class="columns"><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
+          <div class="columns"><label class="select-cell" title="Select all logs on this page"><input id="selectPage" type="checkbox" aria-label="Select all logs on this page"><span></span></label><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
           <div id="rows" class="rows">
             <div class="empty"><div class="empty-icon">⌁</div><h2>Open a JSONL log</h2><p>Drop a file anywhere, or press <kbd>⌘O</kbd></p></div>
           </div>

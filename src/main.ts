@@ -9,6 +9,9 @@ try { if(savedFields) fieldConfig={...defaultFields,...JSON.parse(savedFields)};
 const $ = <T extends HTMLElement>(s:string) => document.querySelector<T>(s)!;
 const followKey='tracebeam.followLatest';
 const state = { info:null as FileInfo|null, levels:new Set<string>(), scopes:new Set<string>(), page:0, limit:250, regex:false, caseSensitive:false, followLatest:localStorage.getItem(followKey)==='true', timer:0 };
+const selected = new Map<number,string>();
+let visibleItems:Entry[]=[];
+let lastSelectedIndex:number|null=null;
 const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
@@ -45,7 +48,7 @@ async function saveFieldConfig(){
 
 async function chooseFile(){ const path=await chooseLogPath(); if(path)await load(path); }
 async function load(path:string){
-  try { setStatus('Opening log…'); const info=await openLog(path); state.info=info; rememberFile(info); state.page=0; state.levels.clear(); state.scopes.clear(); renderInfo(); await query(); closeHistory(); }
+  try { setStatus('Opening log…'); const info=await openLog(path); state.info=info; rememberFile(info); state.page=0; state.levels.clear(); state.scopes.clear(); clearSelection(); renderInfo(); await query(); closeHistory(); }
   catch(e){ $('#resultMeta').textContent=String(e); }
 }
 function rememberFile(info:FileInfo){
@@ -78,11 +81,47 @@ async function query(options:{jumpToLatest?:boolean;scrollToEnd?:boolean}={}){
   const start=result.matched?state.page*state.limit+1:0, end=Math.min((state.page+1)*state.limit,result.matched); $('#range').textContent=`${start.toLocaleString()}–${end.toLocaleString()} of ${result.matched.toLocaleString()}`; $('#perf').textContent=`Searched ${result.total.toLocaleString()} events in ${result.elapsedMs} ms`;
   if(options.scrollToEnd){const rows=$('#rows');rows.scrollTop=rows.scrollHeight}
 }
-function renderRows(result:Result){
+function renderRowsLegacy(result:Result){
   const rows=$('#rows'); if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';return}
   const search = document.querySelector<HTMLInputElement>('#search')!;
   rows.innerHTML=result.items.map(e=>`<button class="row" data-id="${e.id}"><time title="${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span><span class="scope">${esc(e.scope||'—')}</span><span class="message">${highlight(e.message,search.value)}</span></button>`).join('');
   rows.querySelectorAll<HTMLButtonElement>('.row').forEach((el,idx)=>el.onclick=()=>showDetail(result.items[idx]));
+}
+function renderRows(result:Result){
+  visibleItems=result.items;
+  lastSelectedIndex=null;
+  const rows=$('#rows');
+  if(!result.items.length){renderRowsLegacy(result);updateSelectionUi();return}
+  const search=document.querySelector<HTMLInputElement>('#search')!;
+  rows.innerHTML=result.items.map(e=>`<div class="row${selected.has(e.id)?' selected':''}" data-id="${e.id}"><label class="select-cell"><input type="checkbox" ${selected.has(e.id)?'checked':''} aria-label="Select log"><span></span></label><div class="row-content"><button class="entry-open" aria-label="Open log details"></button><time title="${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span>${e.scope?`<button class="scope scope-filter" title="Filter by ${esc(e.scope)}">${esc(e.scope)}</button>`:'<span class="scope">—</span>'}<span class="message">${highlight(e.message,search.value)}</span></div></div>`).join('');
+  rows.querySelectorAll<HTMLElement>('.row').forEach((row,idx)=>{
+    row.querySelector<HTMLButtonElement>('.entry-open')!.onclick=()=>showDetail(result.items[idx]);
+    row.querySelector<HTMLButtonElement>('.scope-filter')?.addEventListener('click',()=>filterByScope(result.items[idx].scope));
+    row.querySelector<HTMLInputElement>('input')!.onclick=event=>selectItem(idx,(event as MouseEvent).shiftKey);
+  });
+  updateSelectionUi();
+}
+function selectItem(index:number,range:boolean){
+  const item=visibleItems[index], shouldSelect=!selected.has(item.id);
+  if(range&&lastSelectedIndex!==null){const [start,end]=[lastSelectedIndex,index].sort((a,b)=>a-b);visibleItems.slice(start,end+1).forEach(entry=>shouldSelect?selected.set(entry.id,entry.raw):selected.delete(entry.id))}
+  else shouldSelect?selected.set(item.id,item.raw):selected.delete(item.id);
+  lastSelectedIndex=index;syncVisibleSelection();
+}
+function syncVisibleSelection(){
+  document.querySelectorAll<HTMLElement>('#rows .row').forEach(row=>{const checked=selected.has(Number(row.dataset.id));row.classList.toggle('selected',checked);row.querySelector<HTMLInputElement>('input')!.checked=checked});
+  updateSelectionUi();
+}
+function updateSelectionUi(){
+  $('#selectionActions').hidden=selected.size===0;$('#selectionCount').textContent=`${selected.size} selected`;
+  const page=$<HTMLInputElement>('#selectPage'), count=visibleItems.filter(item=>selected.has(item.id)).length;
+  page.checked=visibleItems.length>0&&count===visibleItems.length;page.indeterminate=count>0&&count<visibleItems.length;page.disabled=visibleItems.length===0;
+}
+function clearSelection(){selected.clear();lastSelectedIndex=null;syncVisibleSelection()}
+async function copySelected(){if(!selected.size)return;const raw=[...selected.entries()].sort(([a],[b])=>a-b).map(([,value])=>value).join('\n');await navigator.clipboard.writeText(raw);setStatus(`Copied ${selected.size.toLocaleString()} raw log lines`)}
+function filterByScope(scope:string){
+  state.scopes.clear();state.scopes.add(scope);state.page=0;
+  document.querySelectorAll<HTMLInputElement>('.check input[data-type="scope"]').forEach(input=>input.checked=input.value===scope);
+  query();
 }
 function highlight(s:string,q:string){ if(!q||state.regex)return esc(s); const safe=esc(s), needle=esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return safe.replace(new RegExp(needle,state.caseSensitive?'g':'gi'),m=>`<mark>${m}</mark>`); }
 function showDetail(e:Entry){ $('#detailLevel').textContent=e.level; $('#detailLevel').className=`badge ${e.level.toLowerCase()}`; $('#detailTime').textContent=e.timestamp; try{$('#json').textContent=JSON.stringify(JSON.parse(e.raw),null,2)}catch{$('#json').textContent=e.raw} ($('#detail') as HTMLDialogElement).showModal(); }
@@ -109,11 +148,14 @@ $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
 $('#theme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
 $('#follow').onclick=()=>setFollowLatest(!state.followLatest);
+$('#copySelected').onclick=()=>copySelected().catch(error=>setStatus(String(error),true));
+$('#clearSelection').onclick=clearSelection;
+$<HTMLInputElement>('#selectPage').onclick=()=>{const all=visibleItems.length>0&&visibleItems.every(item=>selected.has(item.id));visibleItems.forEach(item=>all?selected.delete(item.id):selected.set(item.id,item.raw));syncVisibleSelection()};
 $('#search').addEventListener('input',debounce); $('#regex').onclick=()=>{state.regex=!state.regex;$('#regex').classList.toggle('active',state.regex);$('#regex').setAttribute('aria-pressed',String(state.regex));debounce()}; $('#case').onclick=()=>{state.caseSensitive=!state.caseSensitive;$('#case').classList.toggle('active',state.caseSensitive);$('#case').setAttribute('aria-pressed',String(state.caseSensitive));debounce()};
 $('#prev').onclick=()=>{if(state.page){state.page--;query()}}; $('#next').onclick=()=>{state.page++;query()};
 $('#clear').onclick=()=>{state.levels.clear();state.scopes.clear();document.querySelectorAll<HTMLInputElement>('.check input').forEach(x=>x.checked=false);state.page=0;query()};
 document.addEventListener('change',e=>{const x=e.target as HTMLInputElement;if(!x.matches('.check input'))return;const set=x.dataset.type==='level'?state.levels:state.scopes;x.checked?set.add(x.value):set.delete(x.value);state.page=0;query()});
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='o'){e.preventDefault();chooseFile()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus()}if(e.key==='Escape'&&($('#detail') as HTMLDialogElement).open)($('#detail') as HTMLDialogElement).close()});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='o'){e.preventDefault();chooseFile()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='c'&&selected.size&&!['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)&&!window.getSelection()?.toString()){e.preventDefault();copySelected().catch(error=>setStatus(String(error),true))}if(e.key==='Escape'&&($('#detail') as HTMLDialogElement).open)($('#detail') as HTMLDialogElement).close()});
 listenForFileDrop(load);
 updateFieldConfig(fieldConfig).catch(()=>{});
 showDemo().catch(error=>{$('#resultMeta').textContent=String(error)});
