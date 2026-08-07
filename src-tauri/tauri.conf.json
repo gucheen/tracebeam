@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "me.guchengf.app.tracebeam.viewer",
   "build": {
-    "beforeDevCommand": "npm run web",
+    "beforeDevCommand": "pnpm run web",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run web:build",
+    "beforeBuildCommand": "pnpm run web:build",
     "frontendDist": "../dist"
   },
   "app": {
