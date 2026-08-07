@@ -23,11 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: setup node
-        uses: actions/setup-node@v6
+      - uses: pnpm/setup@v2
         with:
-          node-version: lts/*
-          cache: 'pnpm' # Set this to npm, yarn or pnpm.
+          runtime: node@lts
+          cache: true
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -43,7 +42,7 @@ jobs:
 
       - name: install frontend dependencies
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: pnpm install # change this to npm, yarn or pnpm depending on which one you use.
+        run: pnpm install --frozen-lockfile # change this to npm, yarn or pnpm depending on which one you use.
 
       - uses: tauri-apps/tauri-action@v1
         env:
