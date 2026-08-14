@@ -31,6 +31,12 @@ function setFollowLatest(enabled:boolean){
   if(enabled&&state.info)query({jumpToLatest:true,scrollToEnd:true});
 }
 
+function stopFollowingWhenScrolledAway(){
+  const rows=$('#rows');
+  const distanceFromBottom=rows.scrollHeight-rows.scrollTop-rows.clientHeight;
+  if(state.followLatest&&distanceFromBottom>1)setFollowLatest(false);
+}
+
 function populateFieldForm(){
   document.querySelector<HTMLInputElement>('#timeFields')!.value=fieldConfig.timeFields.join(', ');
   document.querySelector<HTMLInputElement>('#levelFields')!.value=fieldConfig.levelFields.join(', ');
@@ -148,6 +154,7 @@ $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
 $('#theme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
 $('#follow').onclick=()=>setFollowLatest(!state.followLatest);
+$('#rows').addEventListener('scroll',stopFollowingWhenScrolledAway,{passive:true});
 $('#copySelected').onclick=()=>copySelected().catch(error=>setStatus(String(error),true));
 $('#clearSelection').onclick=clearSelection;
 $<HTMLInputElement>('#selectPage').onclick=()=>{const all=visibleItems.length>0&&visibleItems.every(item=>selected.has(item.id));visibleItems.forEach(item=>all?selected.delete(item.id):selected.set(item.id,item.raw));syncVisibleSelection()};
