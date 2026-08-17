@@ -8,7 +8,8 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "web": "vite",
-    "web:build": "tsc && vite build"
+    "web:build": "tsc && vite build",
+    "version:set": "node scripts/set-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
