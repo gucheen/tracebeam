@@ -87,34 +87,30 @@ async function query(options:{jumpToLatest?:boolean;scrollToEnd?:boolean}={}){
   const start=result.matched?state.page*state.limit+1:0, end=Math.min((state.page+1)*state.limit,result.matched); $('#range').textContent=`${start.toLocaleString()}–${end.toLocaleString()} of ${result.matched.toLocaleString()}`; $('#perf').textContent=`Searched ${result.total.toLocaleString()} events in ${result.elapsedMs} ms`;
   if(options.scrollToEnd){const rows=$('#rows');rows.scrollTop=rows.scrollHeight}
 }
-function renderRowsLegacy(result:Result){
-  const rows=$('#rows'); if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';return}
-  const search = document.querySelector<HTMLInputElement>('#search')!;
-  rows.innerHTML=result.items.map(e=>`<button class="row" data-id="${e.id}"><time title="${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span><span class="scope">${esc(e.scope||'—')}</span><span class="message">${highlight(e.message,search.value)}</span></button>`).join('');
-  rows.querySelectorAll<HTMLButtonElement>('.row').forEach((el,idx)=>el.onclick=()=>showDetail(result.items[idx]));
-}
 function renderRows(result:Result){
   visibleItems=result.items;
   lastSelectedIndex=null;
   const rows=$('#rows');
-  if(!result.items.length){renderRowsLegacy(result);updateSelectionUi();return}
+  if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';updateSelectionUi();return}
   const search=document.querySelector<HTMLInputElement>('#search')!;
   rows.innerHTML=result.items.map(e=>`<div class="row${selected.has(e.id)?' selected':''}" data-id="${e.id}"><label class="select-cell"><input type="checkbox" ${selected.has(e.id)?'checked':''} aria-label="Select log"><span></span></label><div class="row-content"><button class="entry-open" aria-label="Open log details"></button><time title="${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span>${e.scope?`<button class="scope scope-filter" title="Filter by ${esc(e.scope)}">${esc(e.scope)}</button>`:'<span class="scope">—</span>'}<span class="message">${highlight(e.message,search.value)}</span></div></div>`).join('');
   rows.querySelectorAll<HTMLElement>('.row').forEach((row,idx)=>{
-    row.querySelector<HTMLButtonElement>('.entry-open')!.onclick=()=>showDetail(result.items[idx]);
-    row.querySelector<HTMLButtonElement>('.scope-filter')?.addEventListener('click',()=>filterByScope(result.items[idx].scope));
-    row.querySelector<HTMLInputElement>('input')!.onclick=event=>selectItem(idx,(event as MouseEvent).shiftKey);
+    const item=result.items[idx];
+    row.querySelector<HTMLButtonElement>('.entry-open')!.onclick=()=>showDetail(item);
+    row.querySelector<HTMLButtonElement>('.scope-filter')?.addEventListener('click',()=>filterByScope(item.scope));
+    row.querySelector<HTMLInputElement>('.select-cell input')!.onclick=event=>selectItem(item,idx,(event as MouseEvent).shiftKey);
   });
   updateSelectionUi();
 }
-function selectItem(index:number,range:boolean){
-  const item=visibleItems[index], shouldSelect=!selected.has(item.id);
-  if(range&&lastSelectedIndex!==null){const [start,end]=[lastSelectedIndex,index].sort((a,b)=>a-b);visibleItems.slice(start,end+1).forEach(entry=>shouldSelect?selected.set(entry.id,entry.raw):selected.delete(entry.id))}
+function selectItem(item:Entry,index:number,range:boolean){
+  const shouldSelect=!selected.has(item.id);
+  const isCurrentRow=visibleItems[index]?.id===item.id;
+  if(range&&isCurrentRow&&lastSelectedIndex!==null){const [start,end]=[lastSelectedIndex,index].sort((a,b)=>a-b);visibleItems.slice(start,end+1).forEach(entry=>shouldSelect?selected.set(entry.id,entry.raw):selected.delete(entry.id))}
   else shouldSelect?selected.set(item.id,item.raw):selected.delete(item.id);
-  lastSelectedIndex=index;syncVisibleSelection();
+  lastSelectedIndex=isCurrentRow?index:null;syncVisibleSelection();
 }
 function syncVisibleSelection(){
-  document.querySelectorAll<HTMLElement>('#rows .row').forEach(row=>{const checked=selected.has(Number(row.dataset.id));row.classList.toggle('selected',checked);row.querySelector<HTMLInputElement>('input')!.checked=checked});
+  document.querySelectorAll<HTMLElement>('#rows .row').forEach(row=>{const checked=selected.has(Number(row.dataset.id));row.classList.toggle('selected',checked);const input=row.querySelector<HTMLInputElement>('.select-cell input');if(input)input.checked=checked});
   updateSelectionUi();
 }
 function updateSelectionUi(){
