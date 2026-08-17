@@ -21,6 +21,13 @@ struct LogStore {
     position: u64,
     partial: Vec<u8>,
     fields: FieldConfig,
+    query_cache: Option<QueryCache>,
+}
+
+struct QueryCache {
+    key: QueryKey,
+    entry_count: usize,
+    matches: Vec<usize>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -45,7 +52,7 @@ impl Default for FieldConfig {
 
 impl Default for LogStore {
     fn default() -> Self {
-        Self { path: None, entries: vec![], position: 0, partial: vec![], fields: FieldConfig::default() }
+        Self { path: None, entries: vec![], position: 0, partial: vec![], fields: FieldConfig::default(), query_cache: None }
     }
 }
 
@@ -53,9 +60,18 @@ impl Default for LogStore {
 #[serde(rename_all = "camelCase")]
 struct FileInfo { path: String, name: String, size: u64, total: usize, levels: Vec<String>, scopes: Vec<String> }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Query { text: String, regex: bool, case_sensitive: bool, levels: Vec<String>, scopes: Vec<String>, offset: usize, limit: usize }
+
+#[derive(Clone, PartialEq, Eq)]
+struct QueryKey { text: String, regex: bool, case_sensitive: bool, levels: Vec<String>, scopes: Vec<String> }
+
+impl From<&Query> for QueryKey {
+    fn from(query: &Query) -> Self {
+        Self { text: query.text.clone(), regex: query.regex, case_sensitive: query.case_sensitive, levels: query.levels.clone(), scopes: query.scopes.clone() }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,7 +106,7 @@ fn append_new(store: &mut LogStore) -> Result<usize, String> {
     let path = store.path.clone().ok_or("No file is open")?;
     let len = fs::metadata(&path).map_err(|e| e.to_string())?.len();
     if len < store.position {
-        store.entries.clear(); store.position = 0; store.partial.clear();
+        store.entries.clear(); store.position = 0; store.partial.clear(); store.query_cache = None;
     }
     if len == store.position { return Ok(0); }
     let mut file = File::open(&path).map_err(|e| e.to_string())?;
@@ -110,7 +126,9 @@ fn append_new(store: &mut LogStore) -> Result<usize, String> {
         }
         if let Some(entry) = parse_entry(store.entries.len(), &chunk, &store.fields) { store.entries.push(entry); }
     }
-    Ok(store.entries.len() - before)
+    let appended = store.entries.len() - before;
+    if appended > 0 { store.query_cache = None; }
+    Ok(appended)
 }
 
 fn info(store: &LogStore) -> Result<FileInfo, String> {
@@ -145,7 +163,7 @@ fn set_field_config(config: FieldConfig, state: tauri::State<Mutex<LogStore>>) -
     let mut store = state.lock().map_err(|e| e.to_string())?;
     store.fields = config;
     if store.path.is_none() { return Ok(None); }
-    store.entries.clear(); store.position = 0; store.partial.clear();
+    store.entries.clear(); store.position = 0; store.partial.clear(); store.query_cache = None;
     append_new(&mut store)?;
     info(&store).map(Some)
 }
@@ -153,23 +171,28 @@ fn set_field_config(config: FieldConfig, state: tauri::State<Mutex<LogStore>>) -
 #[tauri::command]
 fn query_logs(query: Query, state: tauri::State<Mutex<LogStore>>) -> Result<QueryResult, String> {
     let started = std::time::Instant::now();
-    let store = state.lock().map_err(|e| e.to_string())?;
-    let pattern: Option<Regex> = if query.regex && !query.text.is_empty() {
-        match RegexBuilder::new(&query.text).case_insensitive(!query.case_sensitive).build() {
-            Ok(r) => Some(r), Err(e) => return Ok(QueryResult { items: vec![], matched: 0, total: store.entries.len(), elapsed_ms: started.elapsed().as_millis(), error: Some(e.to_string()) })
-        }
-    } else { None };
-    let needle = if query.case_sensitive { query.text.clone() } else { query.text.to_lowercase() };
-    let mut matched = 0; let mut items = Vec::with_capacity(query.limit);
-    for entry in &store.entries {
-        if !query.levels.is_empty() && !query.levels.contains(&entry.level) { continue; }
-        if !query.scopes.is_empty() && !query.scopes.contains(&entry.scope) { continue; }
-        let text_ok = if needle.is_empty() { true } else if let Some(re) = &pattern { re.is_match(&entry.raw) } else if query.case_sensitive { entry.raw.contains(&needle) } else { entry.raw.to_lowercase().contains(&needle) };
-        if !text_ok { continue; }
-        if matched >= query.offset && items.len() < query.limit { items.push(entry.clone()); }
-        matched += 1;
+    let mut store = state.lock().map_err(|e| e.to_string())?;
+    let key=QueryKey::from(&query);
+    let cache_valid=store.query_cache.as_ref().is_some_and(|cache| cache.key==key&&cache.entry_count==store.entries.len());
+    if !cache_valid {
+        let pattern: Option<Regex> = if query.regex && !query.text.is_empty() {
+            match RegexBuilder::new(&query.text).case_insensitive(!query.case_sensitive).build() {
+                Ok(r) => Some(r), Err(e) => return Ok(QueryResult { items: vec![], matched: 0, total: store.entries.len(), elapsed_ms: started.elapsed().as_millis(), error: Some(e.to_string()) })
+            }
+        } else { None };
+        let needle = if query.case_sensitive { query.text.clone() } else { query.text.to_lowercase() };
+        let matches=store.entries.iter().enumerate().filter_map(|(index,entry)| {
+            if !query.levels.is_empty() && !query.levels.contains(&entry.level) { return None; }
+            if !query.scopes.is_empty() && !query.scopes.contains(&entry.scope) { return None; }
+            let text_ok = if needle.is_empty() { true } else if let Some(re) = &pattern { re.is_match(&entry.raw) } else if query.case_sensitive { entry.raw.contains(&needle) } else { entry.raw.to_lowercase().contains(&needle) };
+            text_ok.then_some(index)
+        }).collect();
+        store.query_cache=Some(QueryCache { key, entry_count:store.entries.len(), matches });
     }
-    Ok(QueryResult { items, matched, total: store.entries.len(), elapsed_ms: started.elapsed().as_millis(), error: None })
+    let indices=&store.query_cache.as_ref().expect("query cache initialized").matches;
+    let matched=indices.len();
+    let items=indices.iter().skip(query.offset).take(query.limit).map(|index| store.entries[*index].clone()).collect();
+    Ok(QueryResult { items, matched, total:store.entries.len(), elapsed_ms: started.elapsed().as_millis(), error: None })
 }
 
 #[tauri::command]
