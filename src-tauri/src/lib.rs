@@ -2,6 +2,7 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{fs::{self, File}, io::{BufRead, BufReader, Seek, SeekFrom}, path::PathBuf, sync::Mutex};
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +60,10 @@ struct Query { text: String, regex: bool, case_sensitive: bool, levels: Vec<Stri
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct QueryResult { items: Vec<Entry>, matched: usize, total: usize, elapsed_ms: u128, error: Option<String> }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo { current_version: String, version: String, notes: Option<String> }
 
 fn value_at_path<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
     value.get(key).or_else(|| key.split('.').try_fold(value, |current, part| current.get(part)))
@@ -167,12 +172,31 @@ fn query_logs(query: Query, state: tauri::State<Mutex<LogStore>>) -> Result<Quer
     Ok(QueryResult { items, matched, total: store.entries.len(), elapsed_ms: started.elapsed().as_millis(), error: None })
 }
 
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    Ok(update.map(|update| UpdateInfo {
+        current_version: update.current_version,
+        version: update.version,
+        notes: update.body,
+    }))
+}
+
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?
+        .ok_or_else(|| "No update is available".to_string())?;
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    app.restart()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(LogStore::default()))
-        .invoke_handler(tauri::generate_handler![open_log, refresh_log, query_logs, set_field_config])
+        .invoke_handler(tauri::generate_handler![open_log, refresh_log, query_logs, set_field_config, check_for_update, install_update])
         .run(tauri::generate_context!()).expect("error while running Tracebeam");
 }
 

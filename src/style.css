@@ -101,6 +101,8 @@ dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;borde
 }
 .icon-button{width:30px;height:30px;border:1px solid #30323a;border-radius:6px;background:#17191e;color:#8f929a;cursor:pointer}
 .icon-button:hover{color:#ceff42;border-color:#59662d}
+.update-button.active{color:#15170f;border-color:#ceff42;background:#ceff42;box-shadow:0 0 14px #ceff4233}
+.update-button:disabled{cursor:wait;opacity:.7}
 .settings-dialog{width:min(560px,80vw)}
 .settings-body{display:flex;flex-direction:column;gap:15px;padding:18px}
 .settings-body p{margin:0 0 4px;color:#797c85;font-size:12px;line-height:1.5}
@@ -146,6 +148,7 @@ dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;borde
 :root[data-theme="light"] header{background:#fff;border-color:#deded8}
 :root[data-theme="light"] .mark{color:#476000;border-color:#7b9d18}
 :root[data-theme="light"] .open,:root[data-theme="light"] .icon-button{background:#f4f4f0;border-color:#d8d8d1;color:#52545a}
+:root[data-theme="light"] .update-button.active{color:#fff;border-color:#719600;background:#719600;box-shadow:none}
 :root[data-theme="light"] .file{color:#666970}
 :root[data-theme="light"] .tail{color:#587600}
 :root[data-theme="light"] .tail i{background:#719600;box-shadow:none}

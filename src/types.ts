@@ -43,6 +43,12 @@ export type LogQuery = {
 
 export type RecentFile = { path: string; name: string; openedAt: number };
 
+export type UpdateInfo = {
+  currentVersion: string;
+  version: string;
+  notes?: string;
+};
+
 export const defaultFields: FieldConfig = {
   timeFields: ['timestamp', 'time', 'ts', '@timestamp'],
   levelFields: ['level', 'severity', 'logLevel'],

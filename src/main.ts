@@ -1,6 +1,6 @@
-import { chooseLogPath, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
+import { checkForUpdate, chooseLogPath, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
 import { escapeHtml as esc, formatBytes as bytes, formatTime } from './format';
-import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile } from './types';
+import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
 const savedFields = localStorage.getItem('tracebeam.fields');
 let fieldConfig: FieldConfig = defaultFields;
@@ -12,6 +12,8 @@ const state = { info:null as FileInfo|null, levels:new Set<string>(), scopes:new
 const selected = new Map<number,string>();
 let visibleItems:Entry[]=[];
 let lastSelectedIndex:number|null=null;
+let availableUpdate:UpdateInfo|null=null;
+let updateBusy=false;
 const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
@@ -22,6 +24,32 @@ applyTheme(localStorage.getItem('tracebeam.theme') || 'dark');
 
 function setStatus(message:string,error=false){
   const element=$('#resultMeta'); element.textContent=message; element.classList.toggle('error',error);
+}
+
+function setUpdateButton(state:'idle'|'checking'|'available'|'installing'){
+  const button=$('#update');button.classList.toggle('active',state==='available');button.toggleAttribute('disabled',state==='checking'||state==='installing');
+  button.textContent=state==='checking'?'…':state==='available'?'↑':state==='installing'?'↓':'↻';
+  button.title=state==='available'&&availableUpdate?`Install Tracebeam ${availableUpdate.version}`:state==='installing'?'Installing update…':'Check for updates';
+}
+
+async function checkUpdates(manual=false){
+  if(updateBusy)return;
+  if(!('__TAURI_INTERNALS__' in window)){if(manual)setStatus('Update checks are available in the desktop app');return}
+  updateBusy=true;setUpdateButton('checking');
+  try{
+    availableUpdate=await checkForUpdate();
+    if(availableUpdate){setUpdateButton('available');if(manual)setStatus(`Tracebeam ${availableUpdate.version} is available`)}
+    else{setUpdateButton('idle');if(manual)setStatus('Tracebeam is up to date')}
+  }catch(error){setUpdateButton('idle');if(manual)setStatus(`Update check failed: ${String(error)}`,true)}
+  finally{updateBusy=false}
+}
+
+async function handleUpdateClick(){
+  if(!availableUpdate){await checkUpdates(true);return}
+  const notes=availableUpdate.notes?.trim();
+  if(!window.confirm(`Install Tracebeam ${availableUpdate.version} now?${notes?`\n\n${notes}`:''}\n\nThe app will restart after installation.`))return;
+  updateBusy=true;setUpdateButton('installing');setStatus(`Downloading Tracebeam ${availableUpdate.version}…`);
+  try{await installUpdate()}catch(error){updateBusy=false;setUpdateButton('available');setStatus(`Update failed: ${String(error)}`,true)}
 }
 
 function setFollowLatest(enabled:boolean){
@@ -145,6 +173,7 @@ renderHistory();
 setFollowLatest(state.followLatest);
 $('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>navigator.clipboard.writeText($('#json').textContent||'');
 $('#settings').onclick=()=>{populateFieldForm();($('#fieldDialog') as HTMLDialogElement).showModal()};
+$('#update').onclick=()=>handleUpdateClick();
 $('#settingsClose').onclick=()=>($('#fieldDialog') as HTMLDialogElement).close();
 $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
@@ -162,4 +191,5 @@ document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLower
 listenForFileDrop(load);
 updateFieldConfig(fieldConfig).catch(()=>{});
 showDemo().catch(error=>{$('#resultMeta').textContent=String(error)});
+window.setTimeout(()=>checkUpdates(),1500);
 window.setInterval(async()=>{if(!state.info)return;try{const latest=await refreshLog();if(latest.total!==state.info.total||latest.size!==state.info.size){state.info=latest;renderInfo();query(state.followLatest?{jumpToLatest:true,scrollToEnd:true}:{})}}catch{}},750);

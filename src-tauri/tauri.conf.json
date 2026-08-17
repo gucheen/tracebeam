@@ -25,6 +25,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "dmg"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -34,6 +35,17 @@
     ],
     "macOS": {
       "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM5NDM3OTA5RjYzNEIzNEMKUldSTXN6VDJDWGxET2ZyTUs5ZHllWlM5ZFFMODFVS3dHUjMzOXNHenM1L0RPSzJWWURmZzBCMGUK",
+      "endpoints": [
+        "https://github.com/gucheen/tracebeam/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
