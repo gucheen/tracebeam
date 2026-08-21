@@ -5,6 +5,8 @@ button,input{font:inherit}
 button{color:inherit}
 header{height:54px;display:flex;align-items:center;gap:18px;padding:0 18px;border-bottom:1px solid #25272c;background:#101115}
 .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em}
+.brand-name{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.app-version{color:#666a73;font:500 9px var(--font-mono);letter-spacing:0}
 .mark{display:grid;place-items:center;width:26px;height:26px;border:1px solid #ceff42;color:#ceff42;font:500 14px var(--font-mono);transform:skew(-6deg)}
 .open{height:32px;padding:0 10px;border:1px solid #34363d;border-radius:6px;background:#1b1d22;cursor:pointer}
 .open:hover{border-color:#666a74}
@@ -124,6 +126,13 @@ dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;borde
 .history-item span{color:#d3d4d7;font-size:12px}
 .history-item small{margin-top:3px;color:#6e7179;font:9px var(--font-mono)}
 .history-empty{padding:18px 8px;text-align:center;color:#666a72;font-size:11px}
+.context-menu{position:fixed;z-index:100;min-width:178px;padding:5px;border:1px solid #353840;border-radius:7px;background:#181a1f;box-shadow:0 12px 34px #0009}
+.context-menu[hidden]{display:none}
+.context-menu button{width:100%;height:30px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 9px;border:0;border-radius:4px;background:transparent;color:#d0d1d5;text-align:left;cursor:pointer;font-size:12px}
+.context-menu button:hover{background:#282b31}
+.context-menu button:disabled{color:#5e6169;cursor:default}
+.context-menu button:disabled:hover{background:transparent}
+.context-menu kbd{padding:0;border:0;background:transparent;color:#6e717a;font-size:9px}
 :root[data-theme="light"]{color-scheme:light}
 :root[data-theme="light"] .content{background:#fafaf8}
 :root[data-theme="light"] .muted,:root[data-theme="light"] .stats span,:root[data-theme="light"] .result-meta,:root[data-theme="light"] footer{color:#73767b}
@@ -139,6 +148,12 @@ dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;borde
 :root[data-theme="light"] .history-item:hover{background:#f0f0ec}
 :root[data-theme="light"] .history-item span{color:#303237}
 :root[data-theme="light"] .history-item small,:root[data-theme="light"] .history-empty{color:#74777d}
+:root[data-theme="light"] .context-menu{background:#fff;border-color:#d7d7d1;box-shadow:0 12px 32px #2b2b2526}
+:root[data-theme="light"] .context-menu button{color:#303237}
+:root[data-theme="light"] .context-menu button:hover{background:#f0f0ec}
+:root[data-theme="light"] .context-menu button:disabled{color:#a5a7a3}
+:root[data-theme="light"] .context-menu button:disabled:hover{background:transparent}
+:root[data-theme="light"] .context-menu kbd{color:#777a80}
 :root[data-theme="light"] .badge{background:#e5e5df;color:#575a60}
 :root[data-theme="light"] .badge.error,:root[data-theme="light"] .badge.fatal{background:#ffe3e5;color:#b72330}
 :root[data-theme="light"] .badge.warn,:root[data-theme="light"] .badge.warning{background:#fff0cf;color:#8a5b00}

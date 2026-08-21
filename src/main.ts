@@ -1,4 +1,4 @@
-import { checkForUpdate, chooseLogPath, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
+import { checkForUpdate, chooseLogPath, getAppVersion, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
 import { escapeHtml as esc, formatBytes as bytes, formatTime } from './format';
 import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
@@ -20,12 +20,67 @@ const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
 const parseFields = (id:string) => document.querySelector<HTMLInputElement>(`#${id}`)!.value.split(',').map(v=>v.trim()).filter(Boolean);
+type EditableTarget=HTMLInputElement|HTMLTextAreaElement;
+type ContextAction={label:string;shortcut?:string;disabled?:boolean;run:()=>void|Promise<void>};
+
+async function renderAppVersion(){
+  let version=__APP_VERSION__;
+  if('__TAURI_INTERNALS__' in window){try{version=await getAppVersion()}catch{}}
+  const element=$('#appVersion');element.textContent=`v${version}`;element.title=`Tracebeam ${version}`;
+}
 
 function applyTheme(theme:string){ document.documentElement.dataset.theme=theme; localStorage.setItem('tracebeam.theme',theme); $('#theme').textContent=theme==='light'?'☾':'☀'; }
 applyTheme(localStorage.getItem('tracebeam.theme') || 'dark');
+void renderAppVersion();
 
 function setStatus(message:string,error=false){
   const element=$('#resultMeta'); element.textContent=message; element.classList.toggle('error',error);
+}
+
+function editableTarget(target:EventTarget|null):EditableTarget|null{
+  if(target instanceof HTMLTextAreaElement)return target.disabled||target.readOnly?null:target;
+  if(!(target instanceof HTMLInputElement)||target.disabled||target.readOnly)return null;
+  return ['text','search','url','tel','email','password'].includes(target.type)?target:null;
+}
+
+function editableSelection(target:EditableTarget){
+  const start=target.selectionStart??0,end=target.selectionEnd??0;
+  return {start,end,text:target.value.slice(start,end)};
+}
+
+function replaceEditableSelection(target:EditableTarget,text:string,inputType:string){
+  const {start,end}=editableSelection(target);target.setRangeText(text,start,end,'end');
+  target.dispatchEvent(new InputEvent('input',{bubbles:true,inputType,data:text}));
+}
+
+function closeContextMenu(){$('#appContextMenu').hidden=true}
+
+function showContextMenu(event:MouseEvent){
+  event.preventDefault();
+  const menu=$('#appContextMenu'),editable=editableTarget(event.target),selection=window.getSelection()?.toString()||'';
+  const modifier=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl+';
+  const actions:ContextAction[]=[];
+  if(editable){
+    const selected=editableSelection(editable).text;
+    actions.push(
+      {label:'Cut',shortcut:`${modifier}X`,disabled:!selected,run:async()=>{await navigator.clipboard.writeText(selected);replaceEditableSelection(editable,'','deleteByCut')}},
+      {label:'Copy',shortcut:`${modifier}C`,disabled:!selected,run:()=>navigator.clipboard.writeText(selected)},
+      {label:'Paste',shortcut:`${modifier}V`,run:async()=>replaceEditableSelection(editable,await navigator.clipboard.readText(),'insertFromPaste')},
+      {label:'Select all',shortcut:`${modifier}A`,run:()=>editable.select()},
+    );
+  }else if(selection){actions.push({label:'Copy',shortcut:`${modifier}C`,run:()=>navigator.clipboard.writeText(selection)})}
+  if(!actions.length){closeContextMenu();return}
+  (document.querySelector('dialog[open]')||$('#app')).append(menu);
+  menu.replaceChildren(...actions.map(action=>{
+    const button=document.createElement('button');button.type='button';button.role='menuitem';button.disabled=!!action.disabled;
+    const label=document.createElement('span');label.textContent=action.label;button.append(label);
+    if(action.shortcut){const shortcut=document.createElement('kbd');shortcut.textContent=action.shortcut;button.append(shortcut)}
+    button.onclick=()=>{closeContextMenu();Promise.resolve(action.run()).catch(error=>setStatus(`${action.label} failed: ${String(error)}`,true))};
+    return button;
+  }));
+  menu.hidden=false;
+  menu.style.left=`${Math.max(6,Math.min(event.clientX,window.innerWidth-menu.offsetWidth-6))}px`;
+  menu.style.top=`${Math.max(6,Math.min(event.clientY,window.innerHeight-menu.offsetHeight-6))}px`;
 }
 
 function setUpdateButton(state:'idle'|'checking'|'available'|'installing'){
@@ -211,7 +266,10 @@ $<HTMLInputElement>('#selectVisible').onclick=()=>{const entries=viewportEntries
 $('#search').addEventListener('input',debounce); $('#regex').onclick=()=>{state.regex=!state.regex;$('#regex').classList.toggle('active',state.regex);$('#regex').setAttribute('aria-pressed',String(state.regex));debounce()}; $('#case').onclick=()=>{state.caseSensitive=!state.caseSensitive;$('#case').classList.toggle('active',state.caseSensitive);$('#case').setAttribute('aria-pressed',String(state.caseSensitive));debounce()};
 $('#clear').onclick=()=>{state.levels.clear();state.scopes.clear();document.querySelectorAll<HTMLInputElement>('.check input').forEach(x=>x.checked=false);resetViewport();query()};
 document.addEventListener('change',e=>{const x=e.target as HTMLInputElement;if(!x.matches('.check input'))return;const set=x.dataset.type==='level'?state.levels:state.scopes;x.checked?set.add(x.value):set.delete(x.value);resetViewport();query()});
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='o'){e.preventDefault();chooseFile()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='c'&&selected.size&&!['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)&&!window.getSelection()?.toString()){e.preventDefault();copySelected().catch(error=>setStatus(String(error),true))}if(e.key==='Escape'&&($('#detail') as HTMLDialogElement).open)($('#detail') as HTMLDialogElement).close()});
+document.addEventListener('contextmenu',showContextMenu);
+document.addEventListener('pointerdown',event=>{if(!$('#appContextMenu').contains(event.target as Node))closeContextMenu()});
+document.addEventListener('scroll',closeContextMenu,true);window.addEventListener('resize',closeContextMenu);
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='o'){e.preventDefault();chooseFile()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='c'&&selected.size&&!['INPUT','TEXTAREA'].includes((e.target as HTMLElement).tagName)&&!window.getSelection()?.toString()){e.preventDefault();copySelected().catch(error=>setStatus(String(error),true))}if(e.key==='Escape'){closeContextMenu();if(($('#detail') as HTMLDialogElement).open)($('#detail') as HTMLDialogElement).close()}});
 listenForFileDrop(load);
 updateFieldConfig(fieldConfig).catch(()=>{});
 showDemo().catch(error=>{$('#resultMeta').textContent=String(error)});

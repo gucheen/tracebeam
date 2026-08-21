@@ -10,7 +10,7 @@
   <body>
     <div id="app">
       <header class="app-header">
-        <div class="brand"><span class="mark" aria-hidden="true">T</span><span>Tracebeam</span></div>
+        <div class="brand"><span class="mark" aria-hidden="true">T</span><span class="brand-name">Tracebeam <span id="appVersion" class="app-version" aria-label="Application version"></span></span></div>
         <button id="open" class="open">Open log <kbd>⌘O</kbd></button>
         <div class="history-wrap">
           <button id="history" class="icon-button" title="Recently opened" aria-label="Recently opened" aria-expanded="false">↶</button>
@@ -76,6 +76,7 @@
           <div class="settings-actions"><button id="resetFields">恢复默认</button><button id="saveFields" class="primary">保存并重新索引</button></div>
         </dialog>
       </main>
+      <div id="appContextMenu" class="context-menu" role="menu" aria-label="Context menu" hidden></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
