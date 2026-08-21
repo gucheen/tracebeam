@@ -16,12 +16,14 @@ header{height:54px;display:flex;align-items:center;gap:18px;padding:0 18px;borde
 .tail i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#ceff42;box-shadow:0 0 8px #ceff42;margin-right:6px}
 kbd{font:11px var(--font-mono);color:#7d8089;background:#24262c;padding:2px 5px;border:1px solid #34363d;border-radius:4px}
 main{height:calc(100vh - 54px);display:flex}
-aside{width:214px;flex:none;border-right:1px solid #25272c;padding:20px 16px;position:relative;background:#0e0f12}
+aside{width:214px;min-height:0;display:flex;flex:none;flex-direction:column;border-right:1px solid #25272c;padding:20px 16px;background:#0e0f12}
 .side-title{display:flex;justify-content:space-between;color:#63666e;font:500 10px var(--font-mono);letter-spacing:.13em}
 .side-title button{border:0;background:none;color:#858892;font-size:11px;cursor:pointer}
 section{margin-top:25px}
 section>label{display:block;color:#5f626b;font:500 10px var(--font-mono);letter-spacing:.1em;margin-bottom:10px}
 .checks{display:flex;flex-direction:column;gap:7px;max-height:260px;overflow:auto}
+.scope-filter-section{min-height:0;display:flex;flex:1;flex-direction:column}
+.scope-filter-section .checks{min-height:0;max-height:none;flex:1}
 .check{display:grid;grid-template-columns:15px 8px 1fr;align-items:center;gap:8px;font:12px var(--font-mono);color:#a9abb2;cursor:pointer;min-width:0}
 .check>span:last-child{overflow:hidden;text-overflow:ellipsis}
 .check input{appearance:none;width:14px;height:14px;margin:0;border:1px solid #42454d;border-radius:3px}
@@ -32,7 +34,7 @@ section>label{display:block;color:#5f626b;font:500 10px var(--font-mono);letter-
 .level-dot.info{background:#67a8ff}
 .level-dot.debug,.level-dot.trace{background:#a681ff}
 .muted{font-size:12px;color:#5f626b}
-.stats{position:absolute;left:16px;right:16px;bottom:20px;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #24262b;padding-top:14px}
+.stats{display:grid;flex:none;grid-template-columns:1fr 1fr;margin-top:20px;border-top:1px solid #24262b;padding-top:14px}
 .stats div{display:flex;flex-direction:column;gap:4px}
 .stats b{font:500 13px var(--font-mono)}
 .stats span{font-size:10px;color:#60636b}
