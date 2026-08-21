@@ -107,6 +107,6 @@ if (!staged.trim()) {
   process.exit(0);
 }
 
-const message = `release: v${version}`;
+const message = `Bump version to ${version}`;
 await runGit(["commit", "-m", message, "--", ...versionPaths]);
 console.log(`Tracebeam version updated to ${version} and committed as "${message}"`);

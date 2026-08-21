@@ -30,7 +30,7 @@ Tracebeam checks `gucheen/tracebeam` GitHub Releases for signed updates. The rep
 gh secret set TAURI_SIGNING_PRIVATE_KEY < .tauri-signing/tracebeam.key
 ```
 
-Keep `.tauri-signing/tracebeam.key` backed up securely; losing it prevents existing installations from accepting future updates. The key is ignored by Git. To publish, start from a clean working tree. The version command updates every application version field, synchronizes `Cargo.lock`, and creates a `release: v<version>` commit. Then push the matching tag:
+Keep `.tauri-signing/tracebeam.key` backed up securely; losing it prevents existing installations from accepting future updates. The key is ignored by Git. To publish, start from a clean working tree. The version command updates every application version field, synchronizes `Cargo.lock`, and creates a `Bump version to <version>` commit. Then push the matching tag:
 
 ```bash
 pnpm version:set 0.2.0
