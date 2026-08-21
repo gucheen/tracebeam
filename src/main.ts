@@ -1,6 +1,7 @@
 import { checkForUpdate, chooseExportPath, chooseLogPath, exportLogs, getAppVersion, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
 import { createFilterPanel, filterInputValue } from './filter-panel';
 import { escapeHtml as esc, formatBytes as bytes, formatTime } from './format';
+import { renderJsonViewer, renderRawJson } from './json-viewer';
 import { buildLogQuery } from './query';
 import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
@@ -18,6 +19,7 @@ let visibleOffset=0;
 let lastSelectedIndex:number|null=null;
 let availableUpdate:UpdateInfo|null=null;
 let updateBusy=false;
+let detailCopyText='';
 const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
@@ -242,27 +244,18 @@ function filterByScope(scope:string){
   query();
 }
 function highlight(s:string,q:string){ if(!q||state.regex)return esc(s); const safe=esc(s), needle=esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return safe.replace(new RegExp(needle,state.caseSensitive?'g':'gi'),m=>`<mark>${m}</mark>`); }
-function primitiveFields(value:unknown,prefix='',result:Array<[string,unknown]>=[]):Array<[string,unknown]>{
-  if(result.length>=30||!value||typeof value!=='object'||Array.isArray(value))return result;
-  for(const [key,child] of Object.entries(value)){
-    const path=prefix?`${prefix}.${key}`:key;
-    if(child===null||['string','number','boolean'].includes(typeof child))result.push([path,child]);
-    else primitiveFields(child,path,result);
-    if(result.length>=30)break;
-  }
-  return result;
-}
 function showDetail(e:Entry){
   $('#detailLevel').textContent=e.level;$('#detailLevel').className=`badge ${e.level.toLowerCase()}`;$('#detailTime').textContent=e.timestamp||'No timestamp';$('#detailLine').textContent=`Line ${e.lineNumber.toLocaleString()}`;
   const error=$('#parseError');error.hidden=!e.parseError;error.textContent=e.parseError?`Invalid JSON: ${e.parseError}`:'';
-  const fields=$('#detailFields');fields.replaceChildren();
+  const viewer=$('#json');detailCopyText=e.raw;
   try{
-    const value=JSON.parse(e.raw);$('#json').textContent=JSON.stringify(value,null,2);
-    for(const [path,fieldValue] of primitiveFields(value)){
-      const button=document.createElement('button');button.type='button';button.textContent=`${path}: ${String(fieldValue)}`;button.title=`Filter by ${path}`;
-      button.onclick=()=>{($('#detail') as HTMLDialogElement).close();filterPanel.addField(path,filterInputValue(fieldValue))};fields.append(button);
-    }
-  }catch{$('#json').textContent=e.raw}
+    const value=JSON.parse(e.raw);detailCopyText=JSON.stringify(value,null,2);
+    renderJsonViewer(viewer,value,({path,operator,value:fieldValue})=>{
+      ($('#detail') as HTMLDialogElement).close();
+      const inputValue=operator==='exists'||operator==='notExists'?'':filterInputValue(fieldValue);
+      filterPanel.addField(path,inputValue,operator);
+    });
+  }catch{renderRawJson(viewer,e.raw)}
   ($('#detail') as HTMLDialogElement).showModal();
 }
 function resetViewport(){state.offset=0;state.matched=0;visibleItems=[];visibleOffset=0;const rows=$('#rows');if(rows)rows.scrollTop=0}
@@ -302,7 +295,7 @@ async function showDemo(){
 
 renderHistory();
 setFollowLatest(state.followLatest);
-$('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>navigator.clipboard.writeText($('#json').textContent||'');
+$('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>navigator.clipboard.writeText(detailCopyText);
 $('#settings').onclick=()=>{populateFieldForm();($('#fieldDialog') as HTMLDialogElement).showModal()};
 $('#update').onclick=()=>handleUpdateClick();
 $('#settingsClose').onclick=()=>($('#fieldDialog') as HTMLDialogElement).close();

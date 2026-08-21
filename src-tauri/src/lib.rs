@@ -186,7 +186,14 @@ struct UpdateInfo {
 fn value_at_path<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
     value.get(key).or_else(|| {
         key.split('.')
-            .try_fold(value, |current, part| current.get(part))
+            .try_fold(value, |current, part| match current {
+                Value::Object(object) => object.get(part),
+                Value::Array(array) => part
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| array.get(index)),
+                _ => None,
+            })
     })
 }
 
@@ -807,6 +814,26 @@ mod tests {
         };
         assert_eq!(matching_indices(&entries, &query).unwrap(), vec![1]);
         assert_eq!(visible_indices(&[1], 1, entries.len()), vec![0, 1]);
+    }
+
+    #[test]
+    fn structured_filters_support_array_indices() {
+        let entries = vec![parse_entry(
+            0,
+            1,
+            br#"{"items":[{"status":503}]}"#,
+            &FieldConfig::default(),
+        )
+        .unwrap()];
+        let query = Query {
+            field_filters: vec![FieldFilter {
+                path: "items.0.status".into(),
+                operator: "equals".into(),
+                value: "503".into(),
+            }],
+            ..base_query()
+        };
+        assert_eq!(matching_indices(&entries, &query).unwrap(), vec![0]);
     }
 
     #[test]

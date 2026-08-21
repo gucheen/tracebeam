@@ -13,7 +13,7 @@ export type FilterPanel = {
   snapshot(): QueryExtras;
   clear(notify?: boolean): void;
   setInvalidOnly(enabled: boolean): void;
-  addField(path: string, value: string): void;
+  addField(path: string, value: string, operator?: FieldOperator): void;
 };
 
 export function createFilterPanel(onApply: () => void, onError: (message: string) => void): FilterPanel {
@@ -130,9 +130,9 @@ export function createFilterPanel(onApply: () => void, onError: (message: string
       updateSummary();
       onApply();
     },
-    addField(path: string, value: string) {
+    addField(path: string, value: string, operator: FieldOperator = 'equals') {
       populate(current);
-      createRow({ path, operator: 'equals', value });
+      createRow({ path, operator, value });
       dialog.showModal();
     },
   };

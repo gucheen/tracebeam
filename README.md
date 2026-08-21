@@ -18,7 +18,7 @@ Each line should contain one JSON object. Tracebeam recognizes `timestamp`/`time
 ## Querying and diagnostics
 
 - Open **Filters** to combine nested field conditions such as `http.status >= 500`, a local time range, and up to 100 surrounding context lines.
-- Click any primitive field in the JSON detail view to prefill a structured equality condition.
+- Hover or keyboard-focus a JSON field to open its inline filter menu; long values wrap without moving the action rail, and array paths such as `items.0.status` are supported.
 - Context rows are visually muted and help explain a match; **Export** writes every direct match, without context-only rows, to JSONL or CSV.
 - Malformed non-empty lines remain visible as `INVALID`, retain their physical line number and parser error, and can be isolated from the sidebar diagnostic.
 
