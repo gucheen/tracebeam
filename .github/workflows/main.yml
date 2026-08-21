@@ -15,11 +15,11 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest' # for Arm based macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
           - platform: 'macos-latest' # for Intel based macs.
-            args: '--target x86_64-apple-darwin'
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
           - platform: 'windows-latest'
-            args: ''
+            args: '--bundles nsis'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -57,7 +57,10 @@ jobs:
             test "$GITHUB_REF_NAME" = "$expected_tag" || { echo "Tag $GITHUB_REF_NAME does not match app version $expected_tag"; exit 1; }
           fi
 
-      - uses: tauri-apps/tauri-action@v1
+      # v1 writes GitHub REST API asset URLs into latest.json. Anonymous desktop
+      # clients share the API's low rate limit and receive 403 responses once it
+      # is exhausted. v0.6.2 uses the public Release download URLs instead.
+      - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -71,3 +74,31 @@ jobs:
           prerelease: false
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  verify-updater-release:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: verify updater metadata
+        shell: bash
+        run: |
+          version="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          metadata_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/latest.json"
+          curl --fail --location --retry 5 --retry-all-errors --output latest.json "$metadata_url"
+
+          for platform in darwin-aarch64 darwin-x86_64 windows-x86_64; do
+            jq --exit-status --arg platform "$platform" \
+              '.platforms[$platform].url | type == "string" and length > 0' latest.json >/dev/null
+            jq --exit-status --arg platform "$platform" \
+              '.platforms[$platform].signature | type == "string" and length > 0' latest.json >/dev/null
+          done
+
+          if jq --exit-status \
+            '[.platforms[].url | startswith("https://api.github.com/")] | any' latest.json >/dev/null; then
+            echo "Updater metadata contains rate-limited GitHub API download URLs"
+            exit 1
+          fi
