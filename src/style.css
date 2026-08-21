@@ -27,6 +27,7 @@ section>label{display:block;color:#5f626b;font:500 10px var(--font-mono);letter-
 .scope-filter-section{min-height:0;display:flex;flex:1;flex-direction:column}
 .scope-filter-section .checks{min-height:0;max-height:none;flex:1}
 .check{display:grid;grid-template-columns:15px 8px 1fr;align-items:center;gap:8px;font:12px var(--font-mono);color:#a9abb2;cursor:pointer;min-width:0}
+.check.scope-check{grid-template-columns:15px 1fr}
 .check>span:last-child{overflow:hidden;text-overflow:ellipsis}
 .check input{appearance:none;width:14px;height:14px;margin:0;border:1px solid #42454d;border-radius:3px}
 .check input:checked{background:#ceff42;border-color:#ceff42;box-shadow:inset 0 0 0 3px #121317}
@@ -106,6 +107,8 @@ dialog::backdrop{background:#050607aa;backdrop-filter:blur(4px)}
 .detail-head b{font:11px var(--font-mono);color:#777a83}
 .detail-head button{border:0;background:none;font-size:24px;color:#777;cursor:pointer}
 dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;border-radius:5px;background:#1c1e23;font-size:12px;cursor:pointer}
+button.copy-success{border-color:#73882f;background:#273316;color:#ceff42}
+button.copy-error{border-color:#6f343a;background:#321b1f;color:#ff737c}
 .parse-error{margin:12px 16px 0;padding:9px 11px;border:1px solid #60343a;border-radius:5px;background:#28171a;color:#ff858d;font:11px/1.5 var(--font-mono)}
 .json-viewer{max-height:60vh;overflow:auto;padding:14px 0;color:#b9c2b0;font:12px/1.65 var(--font-mono);tab-size:2}
 .json-node{position:relative;min-height:22px;padding:1px 42px 1px calc(18px + var(--json-depth)*18px)}
@@ -255,4 +258,6 @@ dialog>button{margin:0 16px 16px;padding:7px 12px;border:1px solid #3a3c43;borde
 :root[data-theme="light"] .settings-body input{background:#fafaf8;border-color:#d6d7d1;color:#292b2f}
 :root[data-theme="light"] .settings-actions button{background:#f2f2ee;border-color:#d5d6d0;color:#515359}
 :root[data-theme="light"] .settings-actions .primary{background:#719600;border-color:#719600;color:#fff}
+:root[data-theme="light"] button.copy-success{border-color:#719600;background:#eaf4d5;color:#547000}
+:root[data-theme="light"] button.copy-error{border-color:#d99da3;background:#fff0f1;color:#b72330}
 :root[data-theme="light"] mark{background:#dfff76}

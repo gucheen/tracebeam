@@ -20,7 +20,14 @@
       "dragDropEnabled": true,
       "backgroundColor": "#0b0c0f"
     }],
-    "security": { "csp": null }
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "style-src": "'self' 'unsafe-inline'"
+      }
+    }
   },
   "bundle": {
     "active": true,

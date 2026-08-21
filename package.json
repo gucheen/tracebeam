@@ -9,6 +9,7 @@
     "build": "tauri build",
     "web": "vite",
     "web:build": "tsc && vite build",
+    "test:security": "node --test tests/*.test.ts",
     "version:set": "node scripts/set-version.mjs"
   },
   "dependencies": {

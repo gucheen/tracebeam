@@ -48,7 +48,7 @@
             <button id="filters" class="filter-button" title="Structured fields, time range and context">Filters <span id="filterCount"></span></button>
             <button id="export" title="Export all matching logs">Export</button>
             <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
-            <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
+            <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)" aria-live="polite">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
             <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
           </div>
           <div class="columns"><label class="select-cell" title="Select visible logs"><input id="selectVisible" type="checkbox" aria-label="Select visible logs"><span></span></label><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
@@ -65,7 +65,7 @@
           <div class="detail-head"><div><span id="detailLevel"></span><b id="detailTime"></b><b id="detailLine"></b></div><button id="close" aria-label="Close">×</button></div>
           <div id="parseError" class="parse-error" hidden></div>
           <div id="json" class="json-viewer" aria-label="JSON details"></div>
-          <button id="copy">Copy JSON</button>
+          <button id="copy" aria-live="polite">Copy JSON</button>
         </dialog>
 
         <dialog id="filterDialog" class="filter-dialog">

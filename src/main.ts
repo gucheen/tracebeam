@@ -1,8 +1,9 @@
 import { checkForUpdate, chooseExportPath, chooseLogPath, exportLogs, getAppVersion, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
 import { createFilterPanel, filterInputValue } from './filter-panel';
-import { escapeHtml as esc, formatBytes as bytes, formatTime } from './format';
+import { formatBytes as bytes, formatTime } from './format';
 import { renderJsonViewer, renderRawJson } from './json-viewer';
 import { buildLogQuery } from './query';
+import { levelToneClass } from './security';
 import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
 const savedFields = localStorage.getItem('tracebeam.fields');
@@ -20,6 +21,7 @@ let lastSelectedIndex:number|null=null;
 let availableUpdate:UpdateInfo|null=null;
 let updateBusy=false;
 let detailCopyText='';
+const copyFeedbackTimers=new WeakMap<HTMLButtonElement,number>();
 const recentKey='tracebeam.recentFiles';
 let recentFiles:RecentFile[]=[];
 try { recentFiles=JSON.parse(localStorage.getItem(recentKey)||'[]').filter((item:RecentFile)=>item?.path&&item?.name).slice(0,10); } catch { localStorage.removeItem(recentKey); }
@@ -39,6 +41,23 @@ void renderAppVersion();
 
 function setStatus(message:string,error=false){
   const element=$('#resultMeta'); element.textContent=message; element.classList.toggle('error',error);
+}
+
+function showCopyFeedback(button:HTMLButtonElement,label:string,error=false){
+  const original=button.dataset.copyLabel||button.textContent||'Copy';button.dataset.copyLabel=original;
+  const activeTimer=copyFeedbackTimers.get(button);if(activeTimer)window.clearTimeout(activeTimer);
+  button.textContent=label;button.classList.toggle('copy-success',!error);button.classList.toggle('copy-error',error);
+  copyFeedbackTimers.set(button,window.setTimeout(()=>{button.textContent=original;button.classList.remove('copy-success','copy-error');copyFeedbackTimers.delete(button)},1600));
+}
+
+function resetCopyFeedback(button:HTMLButtonElement){
+  const activeTimer=copyFeedbackTimers.get(button);if(activeTimer)window.clearTimeout(activeTimer);
+  button.textContent=button.dataset.copyLabel||button.textContent;button.classList.remove('copy-success','copy-error');copyFeedbackTimers.delete(button);
+}
+
+async function copyWithFeedback(text:string,button:HTMLButtonElement){
+  try{await navigator.clipboard.writeText(text);showCopyFeedback(button,'Copied ✓')}
+  catch(error){showCopyFeedback(button,'Copy failed',true);throw error}
 }
 
 const filterPanel=createFilterPanel(
@@ -162,18 +181,34 @@ function rememberFile(info:FileInfo){
 }
 function renderHistory(){
   const menu=$('#historyMenu');
-  menu.innerHTML=`<div class="history-head"><b>RECENTLY OPENED</b>${recentFiles.length?'<button id="clearHistory">Clear</button>':''}</div>${recentFiles.length?recentFiles.map((item,index)=>`<button class="history-item" data-index="${index}" title="${esc(item.path)}"><span>${esc(item.name)}</span><small>${esc(item.path)}</small></button>`).join(''):'<div class="history-empty">No recent files</div>'}`;
-  menu.querySelectorAll<HTMLButtonElement>('.history-item').forEach(button=>button.onclick=()=>load(recentFiles[Number(button.dataset.index)].path));
-  const clear=menu.querySelector<HTMLButtonElement>('#clearHistory'); if(clear)clear.onclick=()=>{recentFiles=[];localStorage.removeItem(recentKey);renderHistory()};
+  const head=document.createElement('div');head.className='history-head';
+  const heading=document.createElement('b');heading.textContent='RECENTLY OPENED';head.append(heading);
+  if(recentFiles.length){
+    const clear=document.createElement('button');clear.type='button';clear.textContent='Clear';
+    clear.onclick=()=>{recentFiles=[];localStorage.removeItem(recentKey);renderHistory()};head.append(clear);
+  }
+  const items:HTMLElement[]=recentFiles.map(item=>{
+    const button=document.createElement('button');button.type='button';button.className='history-item';button.title=item.path;button.onclick=()=>load(item.path);
+    const name=document.createElement('span');name.textContent=item.name;const path=document.createElement('small');path.textContent=item.path;button.append(name,path);return button;
+  });
+  if(!items.length){const empty=document.createElement('div');empty.className='history-empty';empty.textContent='No recent files';items.push(empty)}
+  menu.replaceChildren(head,...items);
 }
 function closeHistory(){ $('#historyMenu').hidden=true; $('#history').setAttribute('aria-expanded','false'); }
 function toggleHistory(){ const menu=$('#historyMenu'); menu.hidden=!menu.hidden; $('#history').setAttribute('aria-expanded',String(!menu.hidden)); }
 function renderInfo(){
   const i=state.info!; $('#filename').textContent=i.name; $('#file').setAttribute('title',i.path); $('#total').textContent=i.total.toLocaleString(); $('#size').textContent=bytes(i.size);
-  $('#levels').innerHTML=i.levels.map(v=>check(v,'level')).join(''); $('#scopes').innerHTML=i.scopes.length?i.scopes.map(v=>check(v,'scope')).join(''):'<span class="muted">No scopes found</span>';
+  $('#levels').replaceChildren(...i.levels.map(value=>createCheck(value,'level')));
+  if(i.scopes.length)$('#scopes').replaceChildren(...i.scopes.map(value=>createCheck(value,'scope')));
+  else{const empty=document.createElement('span');empty.className='muted';empty.textContent='No scopes found';$('#scopes').replaceChildren(empty)}
   const diagnostic=$('#invalidDiagnostic');diagnostic.hidden=i.invalidJson===0;$('#invalidCount').textContent=i.invalidJson.toLocaleString();syncDiagnostic();
 }
-function check(v:string,type:string){ return `<label class="check"><input type="checkbox" data-type="${type}" value="${esc(v)}"><span class="level-dot ${v.toLowerCase()}"></span><span title="${esc(v)}">${esc(v)}</span></label>`; }
+function createCheck(value:string,type:'level'|'scope'){
+  const label=document.createElement('label');label.className=`check ${type}-check`;
+  const input=document.createElement('input');input.type='checkbox';input.dataset.type=type;input.value=value;label.append(input);
+  if(type==='level'){const dot=document.createElement('span');dot.classList.add('level-dot',levelToneClass(value));label.append(dot)}
+  const text=document.createElement('span');text.title=value;text.textContent=value;label.append(text);return label;
+}
 let queryToken=0;
 function currentQuery():LogQuery{
   return buildLogQuery({
@@ -199,16 +234,28 @@ function renderRows(result:Result){
   visibleOffset=state.offset;
   lastSelectedIndex=null;
   const rows=$('#rows');
-  if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';updateViewportUi();return}
+  if(!result.items.length){
+    const empty=document.createElement('div');empty.className='empty';
+    const icon=document.createElement('div');icon.className='empty-icon';icon.textContent='⌕';
+    const title=document.createElement('h2');title.textContent='No matching events';const hint=document.createElement('p');hint.textContent='Try a different query or clear filters';
+    empty.append(icon,title,hint);rows.replaceChildren(empty);updateViewportUi();return;
+  }
   const search=document.querySelector<HTMLInputElement>('#search')!;
-  const content=result.items.map(e=>`<div class="row${selected.has(e.id)?' selected':''}${e.contextOnly?' context-only':''}${e.parseError?' invalid':''}" data-id="${e.id}"><label class="select-cell"><input type="checkbox" ${selected.has(e.id)?'checked':''} aria-label="Select log"><span></span></label><div class="row-content"><button class="entry-open" aria-label="Open log details"></button><time title="Line ${e.lineNumber.toLocaleString()} · ${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span>${e.scope?`<button class="scope scope-filter" title="Filter by ${esc(e.scope)}">${esc(e.scope)}</button>`:'<span class="scope">—</span>'}<span class="message">${highlight(e.message,search.value)}</span></div></div>`).join('');
-  rows.innerHTML=`<div class="virtual-spacer" style="height:${result.matched*rowHeight}px"><div class="virtual-window" style="transform:translateY(${state.offset*rowHeight}px)">${content}</div></div>`;
-  rows.querySelectorAll<HTMLElement>('.row').forEach((row,idx)=>{
-    const item=result.items[idx];
-    row.querySelector<HTMLButtonElement>('.entry-open')!.onclick=()=>showDetail(item);
-    row.querySelector<HTMLButtonElement>('.scope-filter')?.addEventListener('click',()=>filterByScope(item.scope));
-    row.querySelector<HTMLInputElement>('.select-cell input')!.onclick=event=>selectItem(item,idx,(event as MouseEvent).shiftKey);
+  const spacer=document.createElement('div');spacer.className='virtual-spacer';spacer.style.height=`${result.matched*rowHeight}px`;
+  const window=document.createElement('div');window.className='virtual-window';window.style.transform=`translateY(${state.offset*rowHeight}px)`;spacer.append(window);
+  result.items.forEach((item,index)=>{
+    const row=document.createElement('div');row.className='row';row.dataset.id=String(item.id);
+    row.classList.toggle('selected',selected.has(item.id));row.classList.toggle('context-only',item.contextOnly);row.classList.toggle('invalid',!!item.parseError);
+    const select=document.createElement('label');select.className='select-cell';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected.has(item.id);checkbox.setAttribute('aria-label','Select log');checkbox.onclick=event=>selectItem(item,index,(event as MouseEvent).shiftKey);select.append(checkbox,document.createElement('span'));
+    const content=document.createElement('div');content.className='row-content';const open=document.createElement('button');open.type='button';open.className='entry-open';open.setAttribute('aria-label','Open log details');open.onclick=()=>showDetail(item);
+    const time=document.createElement('time');time.title=`Line ${item.lineNumber.toLocaleString()} · ${item.timestamp}`;time.textContent=formatTime(item.timestamp);
+    const level=document.createElement('span');const badge=document.createElement('b');badge.classList.add('badge',levelToneClass(item.level));badge.textContent=item.level;level.append(badge);
+    const scope=document.createElement(item.scope?'button':'span');scope.className=item.scope?'scope scope-filter':'scope';scope.textContent=item.scope||'—';
+    if(scope instanceof HTMLButtonElement){scope.type='button';scope.title=`Filter by ${item.scope}`;scope.onclick=()=>filterByScope(item.scope)}
+    const message=document.createElement('span');message.className='message';appendHighlighted(message,item.message,search.value);
+    content.append(open,time,level,scope,message);row.append(select,content);window.append(row);
   });
+  rows.replaceChildren(spacer);
   updateViewportUi();
 }
 function selectItem(item:Entry,index:number,range:boolean){
@@ -228,7 +275,7 @@ function updateSelectionUi(){
   checkbox.checked=entries.length>0&&count===entries.length;checkbox.indeterminate=count>0&&count<entries.length;checkbox.disabled=entries.length===0;
 }
 function clearSelection(){selected.clear();lastSelectedIndex=null;syncVisibleSelection()}
-async function copySelected(){if(!selected.size)return;const raw=[...selected.entries()].sort(([a],[b])=>a-b).map(([,value])=>value).join('\n');await navigator.clipboard.writeText(raw);setStatus(`Copied ${selected.size.toLocaleString()} raw log lines`)}
+async function copySelected(){if(!selected.size)return;const count=selected.size,raw=[...selected.entries()].sort(([a],[b])=>a-b).map(([,value])=>value).join('\n');await copyWithFeedback(raw,$<HTMLButtonElement>('#copySelected'));setStatus(`Copied ${count.toLocaleString()} raw log lines`)}
 async function exportAll(){
   if(!state.info){setStatus('Open a log before exporting',true);return}
   const stem=state.info.name.replace(/\.[^.]+$/,'')||'tracebeam-export';
@@ -243,9 +290,15 @@ function filterByScope(scope:string){
   document.querySelectorAll<HTMLInputElement>('.check input[data-type="scope"]').forEach(input=>input.checked=input.value===scope);
   query();
 }
-function highlight(s:string,q:string){ if(!q||state.regex)return esc(s); const safe=esc(s), needle=esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return safe.replace(new RegExp(needle,state.caseSensitive?'g':'gi'),m=>`<mark>${m}</mark>`); }
+function appendHighlighted(container:HTMLElement,text:string,query:string){
+  if(!query||state.regex){container.textContent=text;return}
+  const pattern=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),matches=text.matchAll(new RegExp(pattern,state.caseSensitive?'g':'gi'));let cursor=0;
+  for(const match of matches){const index=match.index??cursor;container.append(document.createTextNode(text.slice(cursor,index)));const mark=document.createElement('mark');mark.textContent=match[0];container.append(mark);cursor=index+match[0].length}
+  container.append(document.createTextNode(text.slice(cursor)));
+}
 function showDetail(e:Entry){
-  $('#detailLevel').textContent=e.level;$('#detailLevel').className=`badge ${e.level.toLowerCase()}`;$('#detailTime').textContent=e.timestamp||'No timestamp';$('#detailLine').textContent=`Line ${e.lineNumber.toLocaleString()}`;
+  resetCopyFeedback($<HTMLButtonElement>('#copy'));
+  const detailLevel=$('#detailLevel');detailLevel.textContent=e.level;detailLevel.className='badge';detailLevel.classList.add(levelToneClass(e.level));$('#detailTime').textContent=e.timestamp||'No timestamp';$('#detailLine').textContent=`Line ${e.lineNumber.toLocaleString()}`;
   const error=$('#parseError');error.hidden=!e.parseError;error.textContent=e.parseError?`Invalid JSON: ${e.parseError}`:'';
   const viewer=$('#json');detailCopyText=e.raw;
   try{
@@ -295,7 +348,7 @@ async function showDemo(){
 
 renderHistory();
 setFollowLatest(state.followLatest);
-$('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>navigator.clipboard.writeText(detailCopyText);
+$('#open').onclick=chooseFile; $('#history').onclick=e=>{e.stopPropagation();toggleHistory()}; $('#historyMenu').onclick=e=>e.stopPropagation(); document.addEventListener('click',closeHistory); $('#close').onclick=()=>($('#detail') as HTMLDialogElement).close(); $('#copy').onclick=()=>copyWithFeedback(detailCopyText,$<HTMLButtonElement>('#copy')).catch(error=>setStatus(`Copy JSON failed: ${String(error)}`,true));
 $('#settings').onclick=()=>{populateFieldForm();($('#fieldDialog') as HTMLDialogElement).showModal()};
 $('#update').onclick=()=>handleUpdateClick();
 $('#settingsClose').onclick=()=>($('#fieldDialog') as HTMLDialogElement).close();

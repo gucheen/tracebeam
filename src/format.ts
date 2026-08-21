@@ -1,8 +1,3 @@
-export const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[character]!);
-
 export function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1_048_576) return `${(value / 1024).toFixed(1)} KB`;
