@@ -1,10 +1,13 @@
 export type Entry = {
   id: number;
+  lineNumber: number;
   timestamp: string;
   level: string;
   scope: string;
   message: string;
   raw: string;
+  parseError: string | null;
+  contextOnly: boolean;
 };
 
 export type FileInfo = {
@@ -12,6 +15,7 @@ export type FileInfo = {
   name: string;
   size: number;
   total: number;
+  invalidJson: number;
   levels: string[];
   scopes: string[];
 };
@@ -19,6 +23,7 @@ export type FileInfo = {
 export type QueryResult = {
   items: Entry[];
   matched: number;
+  directMatched: number;
   total: number;
   elapsedMs: number;
   error?: string;
@@ -37,8 +42,29 @@ export type LogQuery = {
   caseSensitive: boolean;
   levels: string[];
   scopes: string[];
+  fieldFilters: FieldFilter[];
+  timeStartMs: number | null;
+  timeEndMs: number | null;
+  context: number;
+  invalidOnly: boolean;
   offset: number;
   limit: number;
+};
+
+export type FieldOperator = 'equals' | 'notEquals' | 'contains' | 'notContains' | 'greater' | 'greaterOrEqual' | 'less' | 'lessOrEqual' | 'exists' | 'notExists';
+
+export type FieldFilter = {
+  path: string;
+  operator: FieldOperator;
+  value: string;
+};
+
+export type QueryExtras = {
+  fieldFilters: FieldFilter[];
+  timeStartMs: number | null;
+  timeEndMs: number | null;
+  context: number;
+  invalidOnly: boolean;
 };
 
 export type RecentFile = { path: string; name: string; openedAt: number };

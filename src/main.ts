@@ -1,5 +1,7 @@
-import { checkForUpdate, chooseLogPath, getAppVersion, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
+import { checkForUpdate, chooseExportPath, chooseLogPath, exportLogs, getAppVersion, installUpdate, listenForFileDrop, openLog, queryLogs, refreshLog, updateFieldConfig } from './backend';
+import { createFilterPanel, filterInputValue } from './filter-panel';
 import { escapeHtml as esc, formatBytes as bytes, formatTime } from './format';
+import { buildLogQuery } from './query';
 import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
 const savedFields = localStorage.getItem('tracebeam.fields');
@@ -35,6 +37,16 @@ void renderAppVersion();
 
 function setStatus(message:string,error=false){
   const element=$('#resultMeta'); element.textContent=message; element.classList.toggle('error',error);
+}
+
+const filterPanel=createFilterPanel(
+  ()=>{syncDiagnostic();resetViewport();void query()},
+  message=>setStatus(message,true),
+);
+
+function syncDiagnostic(){
+  const button=$('#invalidDiagnostic');
+  button.classList.toggle('active',filterPanel.snapshot().invalidOnly);
 }
 
 function editableTarget(target:EventTarget|null):EditableTarget|null{
@@ -157,17 +169,25 @@ function toggleHistory(){ const menu=$('#historyMenu'); menu.hidden=!menu.hidden
 function renderInfo(){
   const i=state.info!; $('#filename').textContent=i.name; $('#file').setAttribute('title',i.path); $('#total').textContent=i.total.toLocaleString(); $('#size').textContent=bytes(i.size);
   $('#levels').innerHTML=i.levels.map(v=>check(v,'level')).join(''); $('#scopes').innerHTML=i.scopes.length?i.scopes.map(v=>check(v,'scope')).join(''):'<span class="muted">No scopes found</span>';
+  const diagnostic=$('#invalidDiagnostic');diagnostic.hidden=i.invalidJson===0;$('#invalidCount').textContent=i.invalidJson.toLocaleString();syncDiagnostic();
 }
 function check(v:string,type:string){ return `<label class="check"><input type="checkbox" data-type="${type}" value="${esc(v)}"><span class="level-dot ${v.toLowerCase()}"></span><span title="${esc(v)}">${esc(v)}</span></label>`; }
 let queryToken=0;
+function currentQuery():LogQuery{
+  return buildLogQuery({
+    text:$<HTMLInputElement>('#search').value,regex:state.regex,caseSensitive:state.caseSensitive,
+    levels:[...state.levels],scopes:[...state.scopes],offset:state.offset,limit:state.limit,
+  },filterPanel.snapshot());
+}
 async function query(options:{jumpToLatest?:boolean;scrollToEnd?:boolean}={}){
-  if(!state.info)return; const token=++queryToken; const search=document.querySelector<HTMLInputElement>('#search')!; const q={ text:search.value, regex:state.regex, caseSensitive:state.caseSensitive, levels:[...state.levels], scopes:[...state.scopes], offset:state.offset, limit:state.limit };
-  const result=await queryLogs(q satisfies LogQuery); if(token!==queryToken)return;
+  if(!state.info)return; const token=++queryToken;
+  const result=await queryLogs(currentQuery()); if(token!==queryToken)return;
   const lastOffset=Math.max(0,result.matched-state.limit);
   if(options.jumpToLatest&&state.offset!==lastOffset){state.offset=lastOffset;return query({scrollToEnd:options.scrollToEnd})}
   if(state.offset>lastOffset){state.offset=lastOffset;return query(options)}
   state.matched=result.matched;
-  $('#resultMeta').textContent=result.error?result.error:`${result.matched.toLocaleString()} matches · ${result.elapsedMs} ms`; $('#resultMeta').classList.toggle('error',!!result.error);
+  const contextLabel=result.matched===result.directMatched?'':` · ${result.matched.toLocaleString()} with context`;
+  $('#resultMeta').textContent=result.error?result.error:`${result.directMatched.toLocaleString()} matches${contextLabel} · ${result.elapsedMs} ms`; $('#resultMeta').classList.toggle('error',!!result.error);
   renderRows(result);
   $('#perf').textContent=`Searched ${result.total.toLocaleString()} events in ${result.elapsedMs} ms`;
   if(options.scrollToEnd){const rows=$('#rows');rows.scrollTop=rows.scrollHeight;updateViewportUi()}
@@ -179,7 +199,7 @@ function renderRows(result:Result){
   const rows=$('#rows');
   if(!result.items.length){rows.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>No matching events</h2><p>Try a different query or clear filters</p></div>';updateViewportUi();return}
   const search=document.querySelector<HTMLInputElement>('#search')!;
-  const content=result.items.map(e=>`<div class="row${selected.has(e.id)?' selected':''}" data-id="${e.id}"><label class="select-cell"><input type="checkbox" ${selected.has(e.id)?'checked':''} aria-label="Select log"><span></span></label><div class="row-content"><button class="entry-open" aria-label="Open log details"></button><time title="${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span>${e.scope?`<button class="scope scope-filter" title="Filter by ${esc(e.scope)}">${esc(e.scope)}</button>`:'<span class="scope">—</span>'}<span class="message">${highlight(e.message,search.value)}</span></div></div>`).join('');
+  const content=result.items.map(e=>`<div class="row${selected.has(e.id)?' selected':''}${e.contextOnly?' context-only':''}${e.parseError?' invalid':''}" data-id="${e.id}"><label class="select-cell"><input type="checkbox" ${selected.has(e.id)?'checked':''} aria-label="Select log"><span></span></label><div class="row-content"><button class="entry-open" aria-label="Open log details"></button><time title="Line ${e.lineNumber.toLocaleString()} · ${esc(e.timestamp)}">${esc(formatTime(e.timestamp))}</time><span><b class="badge ${e.level.toLowerCase()}">${esc(e.level)}</b></span>${e.scope?`<button class="scope scope-filter" title="Filter by ${esc(e.scope)}">${esc(e.scope)}</button>`:'<span class="scope">—</span>'}<span class="message">${highlight(e.message,search.value)}</span></div></div>`).join('');
   rows.innerHTML=`<div class="virtual-spacer" style="height:${result.matched*rowHeight}px"><div class="virtual-window" style="transform:translateY(${state.offset*rowHeight}px)">${content}</div></div>`;
   rows.querySelectorAll<HTMLElement>('.row').forEach((row,idx)=>{
     const item=result.items[idx];
@@ -207,13 +227,44 @@ function updateSelectionUi(){
 }
 function clearSelection(){selected.clear();lastSelectedIndex=null;syncVisibleSelection()}
 async function copySelected(){if(!selected.size)return;const raw=[...selected.entries()].sort(([a],[b])=>a-b).map(([,value])=>value).join('\n');await navigator.clipboard.writeText(raw);setStatus(`Copied ${selected.size.toLocaleString()} raw log lines`)}
+async function exportAll(){
+  if(!state.info){setStatus('Open a log before exporting',true);return}
+  const stem=state.info.name.replace(/\.[^.]+$/,'')||'tracebeam-export';
+  const path=await chooseExportPath(`${stem}-filtered.jsonl`);if(!path)return;
+  const format=path.toLowerCase().endsWith('.csv')?'csv':'jsonl';
+  const button=$<HTMLButtonElement>('#export');button.disabled=true;setStatus('Exporting all matching logs…');
+  try{const count=await exportLogs(currentQuery(),path,format);setStatus(`Exported ${count.toLocaleString()} matching logs`)}
+  catch(error){setStatus(`Export failed: ${String(error)}`,true)}finally{button.disabled=false}
+}
 function filterByScope(scope:string){
   state.scopes.clear();state.scopes.add(scope);resetViewport();
   document.querySelectorAll<HTMLInputElement>('.check input[data-type="scope"]').forEach(input=>input.checked=input.value===scope);
   query();
 }
 function highlight(s:string,q:string){ if(!q||state.regex)return esc(s); const safe=esc(s), needle=esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return safe.replace(new RegExp(needle,state.caseSensitive?'g':'gi'),m=>`<mark>${m}</mark>`); }
-function showDetail(e:Entry){ $('#detailLevel').textContent=e.level; $('#detailLevel').className=`badge ${e.level.toLowerCase()}`; $('#detailTime').textContent=e.timestamp; try{$('#json').textContent=JSON.stringify(JSON.parse(e.raw),null,2)}catch{$('#json').textContent=e.raw} ($('#detail') as HTMLDialogElement).showModal(); }
+function primitiveFields(value:unknown,prefix='',result:Array<[string,unknown]>=[]):Array<[string,unknown]>{
+  if(result.length>=30||!value||typeof value!=='object'||Array.isArray(value))return result;
+  for(const [key,child] of Object.entries(value)){
+    const path=prefix?`${prefix}.${key}`:key;
+    if(child===null||['string','number','boolean'].includes(typeof child))result.push([path,child]);
+    else primitiveFields(child,path,result);
+    if(result.length>=30)break;
+  }
+  return result;
+}
+function showDetail(e:Entry){
+  $('#detailLevel').textContent=e.level;$('#detailLevel').className=`badge ${e.level.toLowerCase()}`;$('#detailTime').textContent=e.timestamp||'No timestamp';$('#detailLine').textContent=`Line ${e.lineNumber.toLocaleString()}`;
+  const error=$('#parseError');error.hidden=!e.parseError;error.textContent=e.parseError?`Invalid JSON: ${e.parseError}`:'';
+  const fields=$('#detailFields');fields.replaceChildren();
+  try{
+    const value=JSON.parse(e.raw);$('#json').textContent=JSON.stringify(value,null,2);
+    for(const [path,fieldValue] of primitiveFields(value)){
+      const button=document.createElement('button');button.type='button';button.textContent=`${path}: ${String(fieldValue)}`;button.title=`Filter by ${path}`;
+      button.onclick=()=>{($('#detail') as HTMLDialogElement).close();filterPanel.addField(path,filterInputValue(fieldValue))};fields.append(button);
+    }
+  }catch{$('#json').textContent=e.raw}
+  ($('#detail') as HTMLDialogElement).showModal();
+}
 function resetViewport(){state.offset=0;state.matched=0;visibleItems=[];visibleOffset=0;const rows=$('#rows');if(rows)rows.scrollTop=0}
 function viewportEntries(){
   const rows=$('#rows'), start=Math.floor(rows.scrollTop/rowHeight), end=Math.ceil((rows.scrollTop+rows.clientHeight)/rowHeight);
@@ -242,10 +293,10 @@ async function showDemo(){
   const raw=await fetch(new URL('../examples/demo.jsonl',import.meta.url)).then(response=>response.text());
   const items:Entry[]=raw.trim().split('\n').map((line,id)=>{
     const value=JSON.parse(line);
-    return {id,timestamp:String(value.timestamp||''),level:String(value.level||'other').toUpperCase(),scope:String(value.scope||''),message:String(value.message||''),raw:line};
+    return {id,lineNumber:id+1,timestamp:String(value.timestamp||''),level:String(value.level||'other').toUpperCase(),scope:String(value.scope||''),message:String(value.message||''),raw:line,parseError:null,contextOnly:false};
   });
-  state.info={path:'examples/demo.jsonl',name:'demo.jsonl',size:new Blob([raw]).size,total:items.length,levels:[...new Set(items.map(item=>item.level))].sort(),scopes:[...new Set(items.map(item=>item.scope))].sort()};
-  renderInfo(); renderRows({items,matched:items.length,total:items.length,elapsedMs:1});
+  state.info={path:'examples/demo.jsonl',name:'demo.jsonl',size:new Blob([raw]).size,total:items.length,invalidJson:0,levels:[...new Set(items.map(item=>item.level))].sort(),scopes:[...new Set(items.map(item=>item.scope))].sort()};
+  renderInfo(); renderRows({items,matched:items.length,directMatched:items.length,total:items.length,elapsedMs:1});
   state.matched=items.length; $('#resultMeta').textContent=`${items.length} matches · 1 ms`; updateViewportUi(); $('#perf').textContent=`Searched ${items.length} events in 1 ms`;
 }
 
@@ -259,12 +310,14 @@ $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
 $('#theme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
 $('#follow').onclick=()=>setFollowLatest(!state.followLatest);
+$('#export').onclick=()=>void exportAll();
+$('#invalidDiagnostic').onclick=()=>filterPanel.setInvalidOnly(!filterPanel.snapshot().invalidOnly);
 $('#rows').addEventListener('scroll',()=>{stopFollowingWhenScrolledAway();scheduleVirtualQuery()},{passive:true});
 $('#copySelected').onclick=()=>copySelected().catch(error=>setStatus(String(error),true));
 $('#clearSelection').onclick=clearSelection;
 $<HTMLInputElement>('#selectVisible').onclick=()=>{const entries=viewportEntries(),all=entries.length>0&&entries.every(item=>selected.has(item.id));entries.forEach(item=>all?selected.delete(item.id):selected.set(item.id,item.raw));syncVisibleSelection()};
 $('#search').addEventListener('input',debounce); $('#regex').onclick=()=>{state.regex=!state.regex;$('#regex').classList.toggle('active',state.regex);$('#regex').setAttribute('aria-pressed',String(state.regex));debounce()}; $('#case').onclick=()=>{state.caseSensitive=!state.caseSensitive;$('#case').classList.toggle('active',state.caseSensitive);$('#case').setAttribute('aria-pressed',String(state.caseSensitive));debounce()};
-$('#clear').onclick=()=>{state.levels.clear();state.scopes.clear();document.querySelectorAll<HTMLInputElement>('.check input').forEach(x=>x.checked=false);resetViewport();query()};
+$('#clear').onclick=()=>{state.levels.clear();state.scopes.clear();filterPanel.clear(false);document.querySelectorAll<HTMLInputElement>('.check input').forEach(x=>x.checked=false);syncDiagnostic();resetViewport();query()};
 document.addEventListener('change',e=>{const x=e.target as HTMLInputElement;if(!x.matches('.check input'))return;const set=x.dataset.type==='level'?state.levels:state.scopes;x.checked?set.add(x.value):set.delete(x.value);resetViewport();query()});
 document.addEventListener('contextmenu',showContextMenu);
 document.addEventListener('pointerdown',event=>{if(!$('#appContextMenu').contains(event.target as Node))closeContextMenu()});

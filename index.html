@@ -29,6 +29,7 @@
           <div class="side-title">FILTERS <button id="clear">Clear</button></div>
           <section><label>LEVEL</label><div id="levels" class="checks"><span class="muted">Open a log to begin</span></div></section>
           <section class="scope-filter-section"><label>SCOPE</label><div id="scopes" class="checks"></div></section>
+          <button id="invalidDiagnostic" class="diagnostic" hidden><span>Invalid JSON</span><b id="invalidCount">0</b></button>
           <div class="stats">
             <div><b id="total">—</b><span>total events</span></div>
             <div><b id="size">—</b><span>file size</span></div>
@@ -44,6 +45,8 @@
             </div>
             <button id="case" title="Case sensitive" aria-pressed="false">Aa</button>
             <button id="regex" title="Regular expression" aria-pressed="false">.*</button>
+            <button id="filters" class="filter-button" title="Structured fields, time range and context">Filters <span id="filterCount"></span></button>
+            <button id="export" title="Export all matching logs">Export</button>
             <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
             <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
             <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
@@ -59,9 +62,29 @@
         </div>
 
         <dialog id="detail">
-          <div class="detail-head"><div><span id="detailLevel"></span><b id="detailTime"></b></div><button id="close" aria-label="Close">×</button></div>
+          <div class="detail-head"><div><span id="detailLevel"></span><b id="detailTime"></b><b id="detailLine"></b></div><button id="close" aria-label="Close">×</button></div>
+          <div id="parseError" class="parse-error" hidden></div>
+          <div id="detailFields" class="detail-fields"></div>
           <pre id="json"></pre>
           <button id="copy">Copy JSON</button>
+        </dialog>
+
+        <dialog id="filterDialog" class="filter-dialog">
+          <div class="detail-head"><div><b>QUERY FILTERS</b></div><button id="filterClose" aria-label="Close">×</button></div>
+          <div class="filter-body">
+            <div class="filter-group">
+              <label>TIME RANGE</label>
+              <div class="time-range"><input id="timeStart" type="datetime-local" step="1"><span>to</span><input id="timeEnd" type="datetime-local" step="1"></div>
+            </div>
+            <div class="filter-options">
+              <label>Context lines <input id="contextLines" type="number" min="0" max="100" value="0"></label>
+              <label class="toggle-label"><input id="invalidOnly" type="checkbox"> Invalid JSON only</label>
+            </div>
+            <div class="field-filter-head"><label>STRUCTURED FIELDS</label><button id="addFieldFilter" type="button">+ Add condition</button></div>
+            <div id="fieldFilterRows" class="field-filter-rows"></div>
+            <p class="filter-hint">Nested paths are supported, for example <code>http.status</code>. Conditions are combined with AND.</p>
+          </div>
+          <div class="settings-actions"><button id="resetFilters">Reset</button><button id="applyFilters" class="primary">Apply filters</button></div>
         </dialog>
 
         <dialog id="fieldDialog" class="settings-dialog">
