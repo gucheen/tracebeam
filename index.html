@@ -38,19 +38,23 @@
 
         <div class="content">
           <div class="toolbar">
-            <div class="search">
-              <span aria-hidden="true">⌕</span>
-              <input id="search" placeholder="Search logs…" aria-label="Search logs" autocomplete="off">
-              <kbd>⌘K</kbd>
+            <div class="toolbar-primary">
+              <div class="search">
+                <span aria-hidden="true">⌕</span>
+                <input id="search" placeholder="Search logs…" aria-label="Search logs" autocomplete="off">
+                <kbd>⌘K</kbd>
+              </div>
+              <button id="case" title="Case sensitive" aria-pressed="false">Aa</button>
+              <button id="regex" title="Regular expression" aria-pressed="false">.*</button>
+              <button id="filters" class="filter-button" title="Structured fields, time range and context">Filters <span id="filterCount"></span></button>
+              <button id="export" title="Export all matching logs">Export</button>
+              <button id="latest" title="Jump to the latest matching log without following">↓ Latest</button>
+              <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
             </div>
-            <button id="case" title="Case sensitive" aria-pressed="false">Aa</button>
-            <button id="regex" title="Regular expression" aria-pressed="false">.*</button>
-            <button id="filters" class="filter-button" title="Structured fields, time range and context">Filters <span id="filterCount"></span></button>
-            <button id="export" title="Export all matching logs">Export</button>
-            <button id="latest" title="Jump to the latest matching log without following">↓ Latest</button>
-            <button id="follow" title="Follow new logs" aria-label="Follow new logs" aria-pressed="false">↓ Follow</button>
-            <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)" aria-live="polite">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
-            <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
+            <div class="toolbar-feedback">
+              <div id="resultMeta" class="result-meta" role="status" aria-live="polite">Ready</div>
+              <div id="selectionActions" class="selection-actions" hidden><span id="selectionCount">0 selected</span><button id="copySelected" title="Copy selected raw log lines (Ctrl/Command+C)" aria-live="polite">Copy raw</button><button id="clearSelection" class="selection-clear" title="Clear selection" aria-label="Clear selection">&times;</button></div>
+            </div>
           </div>
           <div class="columns"><label class="select-cell" title="Select visible logs"><input id="selectVisible" type="checkbox" aria-label="Select visible logs"><span></span></label><span>TIME</span><span>LEVEL</span><span>SCOPE</span><span>MESSAGE</span></div>
           <div id="rows" class="rows">
