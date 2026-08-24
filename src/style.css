@@ -52,7 +52,7 @@ section>label{display:block;color:#5f626b;font:500 10px var(--font-mono);letter-
 .search input{flex:1;border:0;outline:0;background:none;color:#e8e8e9;font:13px var(--font-mono)}
 .toolbar>button{height:34px;min-width:34px;border:1px solid #30323a;border-radius:6px;background:#16181d;color:#92959d;cursor:pointer;font:12px var(--font-mono)}
 .toolbar>button.active{color:#ceff42;border-color:#6b7b33;background:#1d2414}
-.toolbar>#filters,.toolbar>#export,.toolbar>#follow{width:auto;padding:0 9px;white-space:nowrap}
+.toolbar>#filters,.toolbar>#export,.toolbar>#latest,.toolbar>#follow{width:auto;padding:0 9px;white-space:nowrap}
 .filter-button span:empty{display:none}
 .filter-button span{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;border-radius:8px;background:#ceff42;color:#15170f;font-size:9px}
 .result-meta{min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;font:11px var(--font-mono);color:#6f727b;white-space:nowrap}

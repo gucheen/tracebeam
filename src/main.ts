@@ -205,7 +205,7 @@ function renderInfo(){
 }
 function createCheck(value:string,type:'level'|'scope'){
   const label=document.createElement('label');label.className=`check ${type}-check`;
-  const input=document.createElement('input');input.type='checkbox';input.dataset.type=type;input.value=value;label.append(input);
+  const input=document.createElement('input');input.type='checkbox';input.dataset.type=type;input.value=value;input.checked=(type==='level'?state.levels:state.scopes).has(value);label.append(input);
   if(type==='level'){const dot=document.createElement('span');dot.classList.add('level-dot',levelToneClass(value));label.append(dot)}
   const text=document.createElement('span');text.title=value;text.textContent=value;label.append(text);return label;
 }
@@ -355,6 +355,7 @@ $('#settingsClose').onclick=()=>($('#fieldDialog') as HTMLDialogElement).close()
 $('#saveFields').onclick=saveFieldConfig;
 $('#resetFields').onclick=()=>{fieldConfig=structuredClone(defaultFields);populateFieldForm()};
 $('#theme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
+$('#latest').onclick=()=>void query({jumpToLatest:true,scrollToEnd:true});
 $('#follow').onclick=()=>setFollowLatest(!state.followLatest);
 $('#export').onclick=()=>void exportAll();
 $('#invalidDiagnostic').onclick=()=>filterPanel.setInvalidOnly(!filterPanel.snapshot().invalidOnly);
