@@ -57,9 +57,8 @@ jobs:
             test "$GITHUB_REF_NAME" = "$expected_tag" || { echo "Tag $GITHUB_REF_NAME does not match app version $expected_tag"; exit 1; }
           fi
 
-      # v1 writes GitHub REST API asset URLs into latest.json. Anonymous desktop
-      # clients share the API's low rate limit and receive 403 responses once it
-      # is exhausted. v0.6.2 uses the public Release download URLs instead.
+      # Public Release download URLs keep anonymous desktop clients away from
+      # the GitHub REST API's shared low rate limit.
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,9 +69,10 @@ jobs:
           releaseName: 'Tracebeam v__VERSION__'
           releaseBody: 'Download the installer below or update from inside Tracebeam.'
           generateReleaseNotes: true
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true
+          retryAttempts: 3
           args: ${{ matrix.args }}
 
   verify-updater-release:
@@ -80,17 +80,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
 
       - name: verify updater metadata
+        id: metadata
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="$(jq -r '.version' src-tauri/tauri.conf.json)"
-          metadata_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/latest.json"
-          curl --fail --location --retry 5 --retry-all-errors --output latest.json "$metadata_url"
+          tag="v${version}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern latest.json --output latest.json
 
-          for platform in darwin-aarch64 darwin-x86_64 windows-x86_64; do
+          for platform in darwin-aarch64 darwin-aarch64-app darwin-x86_64 darwin-x86_64-app windows-x86_64 windows-x86_64-nsis; do
             jq --exit-status --arg platform "$platform" \
               '.platforms[$platform].url | type == "string" and length > 0' latest.json >/dev/null
             jq --exit-status --arg platform "$platform" \
@@ -102,3 +108,15 @@ jobs:
             echo "Updater metadata contains rate-limited GitHub API download URLs"
             exit 1
           fi
+
+  publish-release:
+    needs: verify-updater-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.verify-updater-release.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
