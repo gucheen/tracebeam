@@ -1,6 +1,6 @@
 # Tracebeam
 
-A lightweight, cross-platform desktop viewer for continuously growing JSONL logs. The Rust core incrementally indexes appended lines; the UI provides fast text/regex search, structured field and time filters, surrounding context, full-result export, invalid JSON diagnostics, virtual scrolling, live refresh, and structured JSON inspection.
+A lightweight, cross-platform desktop viewer for continuously growing JSONL logs. The Rust core incrementally indexes appended lines; the UI provides fast text/regex search, structured field and time filters, surrounding context, full-result export, invalid JSON diagnostics, virtual scrolling, live refresh, structured JSON inspection, and minimize-to-tray support.
 
 ![Tracebeam showing a simulated JSONL log](docs/tracebeam-preview.jpg)
 

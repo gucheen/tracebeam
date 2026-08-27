@@ -9,7 +9,14 @@ use std::{
     path::PathBuf,
     sync::Mutex,
 };
+#[cfg(desktop)]
+use std::{thread, time::Duration};
 use tauri::Manager;
+#[cfg(desktop)]
+use tauri::{
+    menu::MenuBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Clone, Serialize)]
@@ -699,12 +706,86 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     app.restart()
 }
 
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(desktop)]
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let menu = MenuBuilder::new(app)
+        .text("show", "Show Tracebeam")
+        .separator()
+        .text("quit", "Quit")
+        .build()?;
+    let mut tray = TrayIconBuilder::new()
+        .menu(&menu)
+        .tooltip("Tracebeam")
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(LogStore::default()))
+        .setup(|app| {
+            #[cfg(desktop)]
+            setup_tray(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            {
+                if window.label() != "main" {
+                    return;
+                }
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    tauri::WindowEvent::Focused(false) => {
+                        let window = window.clone();
+                        thread::spawn(move || {
+                            thread::sleep(Duration::from_millis(150));
+                            if matches!(window.is_minimized(), Ok(true)) {
+                                let _ = window.unminimize();
+                                let _ = window.hide();
+                            }
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             open_log,
             refresh_log,
