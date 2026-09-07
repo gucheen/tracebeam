@@ -24,6 +24,15 @@
         <span class="tail"><i></i> LIVE</span>
       </header>
 
+      <nav class="tab-bar" aria-label="Open logs">
+        <div id="tabList" class="tab-list" role="tablist"></div>
+        <div class="tab-overview-wrap">
+          <button id="tabOverview" class="tab-overview" title="Show all open logs" aria-label="Show all open logs" aria-expanded="false" hidden>⌄</button>
+          <div id="tabOverviewMenu" class="tab-overview-menu" hidden></div>
+        </div>
+        <button id="newTab" class="new-tab" title="Open another log" aria-label="Open another log">+</button>
+      </nav>
+
       <main>
         <aside>
           <div class="side-title">FILTERS <button id="clear">Clear</button></div>

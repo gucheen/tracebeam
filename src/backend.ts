@@ -1,8 +1,9 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import type { FieldConfig, FileInfo, LogQuery, QueryResult, UpdateInfo } from './types';
+import type { FieldConfig, FileInfo, LogQuery, QueryResult, SessionFileInfo, UpdateInfo } from './types';
 
 export async function chooseLogPath(): Promise<string | null> {
   const path = await open({
@@ -13,13 +14,15 @@ export async function chooseLogPath(): Promise<string | null> {
   return path ? String(path) : null;
 }
 
-export const openLog = (path: string) => invoke<FileInfo>('open_log', { path });
-export const queryLogs = (query: LogQuery) => invoke<QueryResult>('query_logs', { query });
-export const exportLogs = (query: LogQuery, path: string, format: 'jsonl' | 'csv') =>
-  invoke<number>('export_logs', { query, path, format });
-export const refreshLog = () => invoke<FileInfo>('refresh_log');
+export const openLog = (sessionId: string, path: string) => invoke<FileInfo>('open_log', { sessionId, path });
+export const closeLog = (sessionId: string) => invoke<boolean>('close_log', { sessionId });
+export const queryLogs = (sessionId: string, query: LogQuery) => invoke<QueryResult>('query_logs', { sessionId, query });
+export const exportLogs = (sessionId: string, query: LogQuery, path: string, format: 'jsonl' | 'csv') =>
+  invoke<number>('export_logs', { sessionId, query, path, format });
+export const refreshLog = (sessionId: string) => invoke<FileInfo>('refresh_log', { sessionId });
 export const updateFieldConfig = (config: FieldConfig) =>
-  invoke<FileInfo | null>('set_field_config', { config });
+  invoke<SessionFileInfo[]>('set_field_config', { config });
+export const takeStartupPaths = () => invoke<string[]>('take_startup_paths');
 export const checkForUpdate = () => invoke<UpdateInfo | null>('check_for_update');
 export const installUpdate = () => invoke<void>('install_update');
 export const getAppVersion = () => getVersion();
@@ -40,4 +43,9 @@ export function listenForFileDrop(onDrop: (path: string) => void): void {
   void getCurrentWebview().onDragDropEvent((event) => {
     if (event.payload.type === 'drop' && event.payload.paths[0]) onDrop(event.payload.paths[0]);
   });
+}
+
+export async function listenForOpenPaths(onPaths: (paths: string[]) => void): Promise<void> {
+  if (!('__TAURI_INTERNALS__' in window)) return;
+  await listen<string[]>('open-paths', event => onPaths(event.payload));
 }

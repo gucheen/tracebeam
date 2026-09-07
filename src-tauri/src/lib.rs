@@ -3,11 +3,11 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     fs::{self, File},
     io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
-    path::PathBuf,
-    sync::Mutex,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 #[cfg(desktop)]
 use std::{thread, time::Duration};
@@ -16,6 +16,7 @@ use tauri::Manager;
 use tauri::{
     menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter,
 };
 use tauri_plugin_updater::UpdaterExt;
 
@@ -43,6 +44,22 @@ struct LogStore {
     next_line_number: usize,
     fields: FieldConfig,
     query_cache: Option<QueryCache>,
+}
+
+struct AppState {
+    sessions: Mutex<HashMap<String, Arc<Mutex<LogStore>>>>,
+    fields: Mutex<FieldConfig>,
+    startup_paths: Mutex<Vec<String>>,
+}
+
+impl AppState {
+    fn new(startup_paths: Vec<String>) -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            fields: Mutex::new(FieldConfig::default()),
+            startup_paths: Mutex::new(startup_paths),
+        }
+    }
 }
 
 struct QueryCache {
@@ -108,6 +125,13 @@ struct FileInfo {
     invalid_json: usize,
     levels: Vec<String>,
     scopes: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionFileInfo {
+    session_id: String,
+    info: FileInfo,
 }
 
 #[derive(Clone, Deserialize, PartialEq, Eq)]
@@ -518,25 +542,61 @@ fn info(store: &LogStore) -> Result<FileInfo, String> {
     })
 }
 
+fn session(state: &AppState, session_id: &str) -> Result<Arc<Mutex<LogStore>>, String> {
+    state
+        .sessions
+        .lock()
+        .map_err(|error| error.to_string())?
+        .get(session_id)
+        .cloned()
+        .ok_or_else(|| format!("Unknown log session: {session_id}"))
+}
+
 #[tauri::command]
-fn open_log(path: String, state: tauri::State<Mutex<LogStore>>) -> Result<FileInfo, String> {
+fn open_log(
+    session_id: String,
+    path: String,
+    state: tauri::State<AppState>,
+) -> Result<FileInfo, String> {
+    if session_id.trim().is_empty() {
+        return Err("Log session id must not be empty".into());
+    }
     let started = std::time::Instant::now();
-    let mut store = state.lock().map_err(|e| e.to_string())?;
-    let fields = store.fields.clone();
-    *store = LogStore {
+    let fields = state
+        .fields
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone();
+    let mut store = LogStore {
         path: Some(PathBuf::from(path)),
         fields,
         ..Default::default()
     };
     append_new(&mut store)?;
     let result = info(&store)?;
+    state
+        .sessions
+        .lock()
+        .map_err(|error| error.to_string())?
+        .insert(session_id, Arc::new(Mutex::new(store)));
     eprintln!("indexed {} lines in {:?}", result.total, started.elapsed());
     Ok(result)
 }
 
 #[tauri::command]
-fn refresh_log(state: tauri::State<Mutex<LogStore>>) -> Result<FileInfo, String> {
-    let mut store = state.lock().map_err(|e| e.to_string())?;
+fn close_log(session_id: String, state: tauri::State<AppState>) -> Result<bool, String> {
+    Ok(state
+        .sessions
+        .lock()
+        .map_err(|error| error.to_string())?
+        .remove(&session_id)
+        .is_some())
+}
+
+#[tauri::command]
+fn refresh_log(session_id: String, state: tauri::State<AppState>) -> Result<FileInfo, String> {
+    let session = session(&state, &session_id)?;
+    let mut store = session.lock().map_err(|error| error.to_string())?;
     append_new(&mut store)?;
     info(&store)
 }
@@ -544,26 +604,43 @@ fn refresh_log(state: tauri::State<Mutex<LogStore>>) -> Result<FileInfo, String>
 #[tauri::command]
 fn set_field_config(
     config: FieldConfig,
-    state: tauri::State<Mutex<LogStore>>,
-) -> Result<Option<FileInfo>, String> {
-    let mut store = state.lock().map_err(|e| e.to_string())?;
-    store.fields = config;
-    if store.path.is_none() {
-        return Ok(None);
+    state: tauri::State<AppState>,
+) -> Result<Vec<SessionFileInfo>, String> {
+    *state.fields.lock().map_err(|error| error.to_string())? = config.clone();
+    let sessions: Vec<_> = state
+        .sessions
+        .lock()
+        .map_err(|error| error.to_string())?
+        .iter()
+        .map(|(session_id, store)| (session_id.clone(), Arc::clone(store)))
+        .collect();
+    let mut results = Vec::with_capacity(sessions.len());
+    for (session_id, session) in sessions {
+        let mut store = session.lock().map_err(|error| error.to_string())?;
+        store.fields = config.clone();
+        store.entries.clear();
+        store.position = 0;
+        store.partial.clear();
+        store.next_line_number = 1;
+        store.query_cache = None;
+        append_new(&mut store)?;
+        results.push(SessionFileInfo {
+            session_id,
+            info: info(&store)?,
+        });
     }
-    store.entries.clear();
-    store.position = 0;
-    store.partial.clear();
-    store.next_line_number = 1;
-    store.query_cache = None;
-    append_new(&mut store)?;
-    info(&store).map(Some)
+    Ok(results)
 }
 
 #[tauri::command]
-fn query_logs(query: Query, state: tauri::State<Mutex<LogStore>>) -> Result<QueryResult, String> {
+fn query_logs(
+    session_id: String,
+    query: Query,
+    state: tauri::State<AppState>,
+) -> Result<QueryResult, String> {
     let started = std::time::Instant::now();
-    let mut store = state.lock().map_err(|e| e.to_string())?;
+    let session = session(&state, &session_id)?;
+    let mut store = session.lock().map_err(|error| error.to_string())?;
     let key = QueryKey::from(&query);
     let cache_valid = store
         .query_cache
@@ -661,18 +738,28 @@ fn write_export(
 
 #[tauri::command]
 async fn export_logs(
+    session_id: String,
     query: Query,
     path: String,
     format: String,
-    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
 ) -> Result<usize, String> {
+    let session = session(&state, &session_id)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<Mutex<LogStore>>();
-        let store = state.lock().map_err(|error| error.to_string())?;
+        let store = session.lock().map_err(|error| error.to_string())?;
         write_export(query, path, format, &store)
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn take_startup_paths(state: tauri::State<AppState>) -> Result<Vec<String>, String> {
+    let mut paths = state
+        .startup_paths
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(std::mem::take(&mut *paths))
 }
 
 #[tauri::command]
@@ -716,6 +803,23 @@ fn show_main_window(app: &tauri::AppHandle) {
 }
 
 #[cfg(desktop)]
+fn log_paths_from_args(args: &[String], cwd: &str) -> Vec<String> {
+    args.iter()
+        .skip(1)
+        .filter(|argument| !argument.starts_with('-'))
+        .filter_map(|argument| {
+            let path = Path::new(argument);
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                Path::new(cwd).join(path)
+            };
+            path.is_file().then(|| path.display().to_string())
+        })
+        .collect()
+}
+
+#[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let menu = MenuBuilder::new(app)
         .text("show", "Show Tracebeam")
@@ -752,10 +856,31 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[cfg(desktop)]
+    let startup_paths = {
+        let args: Vec<_> = std::env::args().collect();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        log_paths_from_args(&args, &cwd.display().to_string())
+    };
+    #[cfg(not(desktop))]
+    let startup_paths = Vec::new();
+
+    let mut builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            show_main_window(app);
+            let paths = log_paths_from_args(&args, &cwd);
+            if !paths.is_empty() {
+                let _ = app.emit("open-paths", paths);
+            }
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(Mutex::new(LogStore::default()))
+        .manage(AppState::new(startup_paths))
         .setup(|app| {
             #[cfg(desktop)]
             setup_tray(app)?;
@@ -788,10 +913,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_log,
+            close_log,
             refresh_log,
             query_logs,
             export_logs,
             set_field_config,
+            take_startup_paths,
             check_for_update,
             install_update
         ])
@@ -955,6 +1082,25 @@ mod tests {
             .unwrap(),
             vec![2]
         );
+    }
+
+    #[test]
+    fn app_state_keeps_log_sessions_independent() {
+        let state = AppState::new(vec![]);
+        let first = Arc::new(Mutex::new(LogStore::default()));
+        let second = Arc::new(Mutex::new(LogStore::default()));
+        {
+            let mut sessions = state.sessions.lock().unwrap();
+            sessions.insert("first".into(), Arc::clone(&first));
+            sessions.insert("second".into(), Arc::clone(&second));
+        }
+        session(&state, "first")
+            .unwrap()
+            .lock()
+            .unwrap()
+            .next_line_number = 42;
+        assert_eq!(second.lock().unwrap().next_line_number, 1);
+        assert!(session(&state, "missing").is_err());
     }
 
     #[test]

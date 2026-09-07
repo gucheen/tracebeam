@@ -11,6 +11,7 @@ const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>
 
 export type FilterPanel = {
   snapshot(): QueryExtras;
+  replace(value: QueryExtras): void;
   clear(notify?: boolean): void;
   setInvalidOnly(enabled: boolean): void;
   addField(path: string, value: string, operator?: FieldOperator): void;
@@ -120,6 +121,10 @@ export function createFilterPanel(onApply: () => void, onError: (message: string
   updateSummary();
   return {
     snapshot: () => clone(current),
+    replace(value: QueryExtras) {
+      current = clone(value);
+      updateSummary();
+    },
     clear(notify = true) {
       current = emptyQueryExtras();
       updateSummary();

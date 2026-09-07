@@ -69,6 +69,8 @@ export type QueryExtras = {
 
 export type RecentFile = { path: string; name: string; openedAt: number };
 
+export type SessionFileInfo = { sessionId: string; info: FileInfo };
+
 export type UpdateInfo = {
   currentVersion: string;
   version: string;

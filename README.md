@@ -32,6 +32,7 @@ The screenshot uses [`examples/demo.jsonl`](examples/demo.jsonl). While developi
 
 ### Desktop experience
 
+- Keeps multiple logs open in isolated tabs, sleeping least-recently-used background sessions when needed, and routes additional launches to the running app.
 - Includes dark and light themes and signed in-app updates.
 
 ## JSONL format
