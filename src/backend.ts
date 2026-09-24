@@ -2,6 +2,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow, type Theme } from '@tauri-apps/api/window';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type { FieldConfig, FileInfo, LogQuery, QueryResult, SessionFileInfo, UpdateInfo } from './types';
 
@@ -26,6 +27,15 @@ export const takeStartupPaths = () => invoke<string[]>('take_startup_paths');
 export const checkForUpdate = () => invoke<UpdateInfo | null>('check_for_update');
 export const installUpdate = () => invoke<void>('install_update');
 export const getAppVersion = () => getVersion();
+
+export async function setWindowTheme(theme: Theme): Promise<void> {
+  if (!('__TAURI_INTERNALS__' in window)) return;
+  const appWindow = getCurrentWindow();
+  await Promise.all([
+    appWindow.setTheme(theme),
+    appWindow.setBackgroundColor(theme === 'light' ? '#f5f5f2' : '#0b0c0f'),
+  ]);
+}
 
 export async function chooseExportPath(defaultName: string): Promise<string | null> {
   const path = await save({

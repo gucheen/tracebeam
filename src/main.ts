@@ -1,4 +1,4 @@
-import { checkForUpdate, chooseExportPath, chooseLogPath, closeLog, exportLogs, getAppVersion, installUpdate, listenForFileDrop, listenForOpenPaths, openLog, queryLogs, refreshLog, takeStartupPaths, updateFieldConfig } from './backend';
+import { checkForUpdate, chooseExportPath, chooseLogPath, closeLog, exportLogs, getAppVersion, installUpdate, listenForFileDrop, listenForOpenPaths, openLog, queryLogs, refreshLog, setWindowTheme, takeStartupPaths, updateFieldConfig } from './backend';
 import { createFilterPanel, filterInputValue } from './filter-panel';
 import { formatBytes as bytes, formatTime } from './format';
 import { renderJsonViewer, renderRawJson } from './json-viewer';
@@ -11,6 +11,10 @@ let fieldConfig: FieldConfig = defaultFields;
 try { if(savedFields) fieldConfig={...defaultFields,...JSON.parse(savedFields)}; } catch { localStorage.removeItem('tracebeam.fields'); }
 
 const $ = <T extends HTMLElement>(s:string) => document.querySelector<T>(s)!;
+if('__TAURI_INTERNALS__' in window && /Mac/.test(navigator.platform)){
+  document.documentElement.classList.add('macos');
+  document.querySelectorAll('.app-header, .app-header .spacer, .app-header .brand, .app-header .brand *').forEach(element=>element.setAttribute('data-tauri-drag-region',''));
+}
 const followKey='tracebeam.followLatest';
 const rowHeight=34;
 const gibibyte=1024**3;
@@ -49,7 +53,13 @@ async function renderAppVersion(){
   const element=$('#appVersion');element.textContent=`v${version}`;element.title=`Tracebeam ${version}`;
 }
 
-function applyTheme(theme:string){ document.documentElement.dataset.theme=theme; localStorage.setItem('tracebeam.theme',theme); $('#theme').textContent=theme==='light'?'☾':'☀'; }
+function applyTheme(value:string){
+  const theme=value==='light'?'light':'dark';
+  document.documentElement.dataset.theme=theme;
+  localStorage.setItem('tracebeam.theme',theme);
+  $('#theme').textContent=theme==='light'?'☾':'☀';
+  void setWindowTheme(theme).catch(error=>console.error('Failed to apply window theme',error));
+}
 applyTheme(localStorage.getItem('tracebeam.theme') || 'dark');
 void renderAppVersion();
 

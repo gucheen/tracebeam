@@ -17,8 +17,10 @@
       "minWidth": 980,
       "minHeight": 640,
       "decorations": true,
-      "dragDropEnabled": true,
-      "backgroundColor": "#0b0c0f"
+      "titleBarStyle": "Overlay",
+      "hiddenTitle": true,
+      "trafficLightPosition": { "x": 16, "y": 29 },
+      "dragDropEnabled": true
     }],
     "security": {
       "csp": {
