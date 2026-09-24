@@ -2,9 +2,9 @@
 
 A lightweight, cross-platform desktop viewer for exploring continuously growing JSONL logs.
 
-![Tracebeam showing a simulated JSONL log](docs/tracebeam-preview.jpg)
+![Tracebeam showing a simulated JSONL log in the light theme](docs/tracebeam-preview.jpg)
 
-The screenshot uses [`examples/demo.jsonl`](examples/demo.jsonl). While developing, open `http://127.0.0.1:1420/?demo` to reproduce the preview without the desktop file picker.
+The screenshot uses [`examples/demo.jsonl`](examples/demo.jsonl) in the light theme. While developing, open `http://127.0.0.1:1420/?demo` and use the theme toggle in the top-right corner to switch to the light theme and reproduce the preview without the desktop file picker.
 
 ## Features
 
