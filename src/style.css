@@ -5,6 +5,14 @@ button,input{font:inherit}
 button{color:inherit}
 header{height:54px;display:flex;align-items:center;gap:18px;padding:0 18px;border-bottom:1px solid #25272c;background:#101115}
 :root.macos .app-header{padding-left:90px;user-select:none}
+:root.windows .app-header{padding-right:0;user-select:none}
+.window-controls{display:flex;align-self:stretch;flex:none}
+.window-controls[hidden]{display:none}
+.window-controls button{display:grid;place-items:center;width:42px;padding:0;border:0;border-radius:0;background:transparent;cursor:pointer}
+.window-controls button:hover{background:#8883}
+.window-controls button:focus-visible{outline:2px solid currentColor;outline-offset:-3px}
+.window-controls #windowClose:hover{background:#c42b1c;color:#fff}
+.window-controls svg{fill:none;stroke:currentColor;stroke-width:1}
 .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em}
 .brand-name{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
 .app-version{color:#666a73;font:500 9px var(--font-mono);letter-spacing:0}

@@ -6,15 +6,17 @@ import { buildLogQuery, emptyQueryExtras } from './query';
 import { levelToneClass } from './security';
 import { defaultFields, type Entry, type FieldConfig, type FileInfo, type LogQuery, type QueryExtras, type QueryResult as Result, type RecentFile, type UpdateInfo } from './types';
 import './style.css';
+import { initializeWindowControls } from './window-controls';
 const savedFields = localStorage.getItem('tracebeam.fields');
 let fieldConfig: FieldConfig = defaultFields;
 try { if(savedFields) fieldConfig={...defaultFields,...JSON.parse(savedFields)}; } catch { localStorage.removeItem('tracebeam.fields'); }
 
 const $ = <T extends HTMLElement>(s:string) => document.querySelector<T>(s)!;
-if('__TAURI_INTERNALS__' in window && /Mac/.test(navigator.platform)){
-  document.documentElement.classList.add('macos');
+if('__TAURI_INTERNALS__' in window && /Mac|Win/.test(navigator.platform)){
+  document.documentElement.classList.add(/Mac/.test(navigator.platform)?'macos':'windows');
   document.querySelectorAll('.app-header, .app-header .spacer, .app-header .brand, .app-header .brand *').forEach(element=>element.setAttribute('data-tauri-drag-region',''));
 }
+initializeWindowControls();
 const followKey='tracebeam.followLatest';
 const rowHeight=34;
 const gibibyte=1024**3;
